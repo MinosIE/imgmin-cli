@@ -1,7 +1,7 @@
 {
   "name": "imgmin-cli",
   "version": "1.0.0",
-  "description": "A powerful CLI tool for compressing and converting images",
+  "description": "A powerful CLI tool for compressing and converting images to WebP and other formats",
   "type": "module",
   "main": "src/index.js",
   "bin": {
@@ -17,10 +17,20 @@
     "converter",
     "cli",
     "sharp",
-    "webp"
+    "webp",
+    "image-optimization",
+    "batch-processing"
   ],
-  "author": "",
+  "author": "MinosIE",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MinosIE/imgmin-cli.git"
+  },
+  "homepage": "https://github.com/MinosIE/imgmin-cli#readme",
+  "bugs": {
+    "url": "https://github.com/MinosIE/imgmin-cli/issues"
+  },
   "dependencies": {
     "sharp": "^0.33.0",
     "commander": "^12.0.0",
@@ -30,5 +40,11 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "packageManager": "pnpm@9.14.2+sha1.5202b50ab92394b3c922d2e293f196e2df6d441b"
 }

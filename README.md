@@ -79,41 +79,24 @@ imgmin config -r               # 重置所有配置
 ### compress / c - 压缩图片
 
 ```bash
-imgmin compress [source] [output] [options]
-imgmin c [source] [output] [options]          # 使用别名
+imgmin compress <source> [output] [options]
+imgmin c <source> [output] [options]          # 使用别名
 
 # 示例
-imgmin c                                      # 压缩当前目录所有图片（默认行为）
-imgmin c .                                    # 同上
 imgmin c input.jpg                            # 压缩单张图片
 imgmin c input.png -q 85                      # 设置质量
-imgmin c input.jpg -f webp                    # 输出为 webp 格式
+imgmin c input.jpg output.webp -f webp        # 输出为 webp
 imgmin c ./images ./output -r                 # 批量压缩目录
-imgmin c . --force                            # 直接替换原文件（不添加 _compressed 后缀）
-imgmin c . --no-webp                          # 不生成 webp 版本
-imgmin c . --force --no-webp                  # 只替换原文件，不生成 webp
 ```
 
 **选项：**
-- `-q, --quality <number>` - 质量 1-100（默认使用配置值 80）
-- `-r, --recursive` - 递归处理子目录（默认开启）
+- `-q, --quality <number>` - 质量 1-100（默认使用配置）
+- `-r, --recursive` - 递归处理子目录
 - `-f, --format <type>` - 输出格式（jpeg, png, webp, avif）
-- `--force` - 直接替换原文件，不添加 `_compressed` 后缀
-- `--no-webp` - 不生成 WebP 版本
 
-**默认行为：**
-- 不指定 source 时，自动扫描当前目录及子目录下所有图片
-- 压缩后生成 `xxx_compressed.jpg`（保留原文件）
-- 同时生成 `xxx.webp` 版本
-- 已存在压缩文件或 webp 文件的图片会自动跳过
-
-**`--force` 模式：**
-- 用压缩后的文件直接替换原文件（不保留原文件）
-- 不添加 `_compressed` 后缀
-- webp 生成逻辑不变
-
-**别名：**
-- `c` - `compress` 的简短形式
+**提示：** 
+- 使用 `imgmin` 默认命令可以快速批量转换整个目录
+- `c` 是 `compress` 的简短形式，两者功能完全相同
 
 ### webp - 转换为 WebP
 
@@ -159,6 +142,73 @@ imgmin info input.jpg
 **输入：** JPEG, PNG, GIF, WebP, TIFF, BMP, SVG, AVIF
 
 **输出：** JPEG, PNG, WebP, AVIF, TIFF, GIF
+
+## 📚 API 使用（Node.js 模块）
+
+除了 CLI 工具，你还可以在代码中使用 imgmin-cli 的 API：
+
+### 安装
+
+```bash
+npm install imgmin-cli
+```
+
+### 示例
+
+#### 压缩图片
+
+```javascript
+import { compressImage } from 'imgmin-cli/src/compress.js';
+
+// 压缩单张图片
+await compressImage('input.jpg', 'output.jpg', { 
+  quality: 80,
+  format: 'jpeg' 
+});
+
+// 转换为 WebP
+await compressImage('input.png', 'output.webp', { 
+  quality: 75 
+});
+```
+
+#### 批量转换为 WebP
+
+```javascript
+import { compressImageToWebp } from 'imgmin-cli/src/compress.js';
+
+// 转换并指定质量
+await compressImageToWebp('input.png', 'output.webp', 80);
+```
+
+#### 格式转换
+
+```javascript
+import { convertImage } from 'imgmin-cli/src/convert.js';
+
+// PNG 转 JPEG
+await convertImage('input.png', 'output.jpg', { 
+  quality: 90 
+});
+```
+
+#### 获取图片信息
+
+```javascript
+import { getImageInfo } from 'imgmin-cli/src/utils.js';
+
+const info = await getImageInfo('photo.jpg');
+console.log(info);
+// {
+//   fileName: 'photo.jpg',
+//   size: 1234567,
+//   format: 'jpeg',
+//   width: 1920,
+//   height: 1080,
+//   hasAlpha: false,
+//   density: 72
+// }
+```
 
 ## 依赖
 
