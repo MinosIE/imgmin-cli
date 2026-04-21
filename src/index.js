@@ -264,7 +264,7 @@ program
       spinner.succeed(chalk.green(`\n✓ Converted successfully!`));
       console.log(chalk.gray(`  Original: ${result.originalSize} bytes`));
       console.log(chalk.gray(`  Converted: ${result.convertedSize} bytes`));
-      console.log(chalk.green(`  Saved: ${result.savedPercent}`));
+      console.log(chalk.green(`  Saved: ${result.savedPercent}%`));
     } catch (error) {
       spinner.fail(chalk.red(`\n✗ Error: ${error.message}`));
     }
@@ -297,7 +297,7 @@ program
 
 // 批量处理函数 - 处理所有图片并转换为 WebP
 async function processAllImagesToWebp(sourceDir, config) {
-  const pattern = `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,bmp,svg,avif,webp}`;
+  const pattern = `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,tif,bmp,svg,avif,webp}`;
   const files = await glob(pattern, { nodir: true });
   
   // 过滤掉已经是 webp 的文件（只压缩不转换）
@@ -307,7 +307,7 @@ async function processAllImagesToWebp(sourceDir, config) {
   // 检查是否有可处理的图片
   if (imageFiles.length === 0 && webpFiles.length === 0) {
     console.log(chalk.yellow(`\n⚠ No images found in current directory`));
-    console.log(chalk.gray(`  Supported formats: jpg, jpeg, png, gif, tiff, bmp, svg, avif`));
+    console.log(chalk.gray(`  Supported formats: jpg, jpeg, png, gif, tiff, tif, bmp, svg, avif, webp`));
     console.log(chalk.gray(`  Run 'imgmin --help' for usage information\n`));
     return { 
       success: 0, 
@@ -384,8 +384,8 @@ function generateUniqueOutputPath(originalPath, targetExt, processedFiles) {
   let outputPath = path.join(dir, `${baseName}${targetExt}`);
   let counter = 1;
   
-  // 检查文件名是否已被使用
-  while (processedFiles.has(originalPath) || fs.existsSync(outputPath)) {
+  // 检查输出文件名是否已被使用（检查已生成的输出文件或磁盘上已存在的文件）
+  while (Array.from(processedFiles.values()).includes(outputPath) || fs.existsSync(outputPath)) {
     outputPath = path.join(dir, `${baseName}_${counter}${targetExt}`);
     counter++;
   }
@@ -396,8 +396,8 @@ function generateUniqueOutputPath(originalPath, targetExt, processedFiles) {
 async function processDirectory(sourceDir, outputDir, options, spinner) {
   const { quality, recursive, format, generateWebp, forceReplace } = options;
   const pattern = recursive 
-    ? `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,bmp,svg,avif}`
-    : `${sourceDir}/*.{jpg,jpeg,png,gif,tiff,bmp,svg,avif}`;
+    ? `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,tif,bmp,svg,avif}`
+    : `${sourceDir}/*.{jpg,jpeg,png,gif,tiff,tif,bmp,svg,avif}`;
   
   const files = await glob(pattern, { nodir: true });
   // 过滤掉 _compressed 等已处理过的文件，避免重复压缩
@@ -520,8 +520,8 @@ async function processDirectory(sourceDir, outputDir, options, spinner) {
 async function processDirectoryToWebp(sourceDir, outputDir, options, spinner) {
   const { quality, recursive } = options;
   const pattern = recursive 
-    ? `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,bmp,svg,avif}`
-    : `${sourceDir}/*.{jpg,jpeg,png,gif,tiff,bmp,svg,avif}`;
+    ? `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,tif,bmp,svg,avif}`
+    : `${sourceDir}/*.{jpg,jpeg,png,gif,tiff,tif,bmp,svg,avif}`;
   
   const files = await glob(pattern, { nodir: true });
   const filteredFiles = files.filter(f => !path.basename(f).includes('_compressed'));
