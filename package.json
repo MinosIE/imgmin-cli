@@ -5,7 +5,7 @@
   "type": "module",
   "main": "src/index.js",
   "bin": {
-    "imgmin": "./bin/cli.js"
+    "imgmin": "bin/cli.js"
   },
   "scripts": {
     "start": "node bin/cli.js",
@@ -25,7 +25,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/MinosIE/imgmin-cli.git"
+    "url": "git+https://github.com/MinosIE/imgmin-cli.git"
   },
   "homepage": "https://github.com/MinosIE/imgmin-cli#readme",
   "bugs": {
