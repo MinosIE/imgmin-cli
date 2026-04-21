@@ -33,7 +33,7 @@ program
       if (results.failed > 0) {
         console.log(chalk.red(`  Failed: ${results.failed} files`));
       }
-      console.log(chalk.green(`  Total saved: ${results.totalSavedPercent}%`));
+      console.log(chalk.green(`  Total saved: ${results.totalSavedPercent}`));
       console.log();
     } catch (error) {
       spinner.fail(chalk.red(`\n✗ Error: ${error.message}`));
@@ -138,9 +138,9 @@ program
       
       if (stats.isDirectory()) {
         spinner.text = 'Processing directory...';
-        const results = await processDirectory(sourcePath, output, { quality, recursive, format, generateWebp, forceReplace });
+        const results = await processDirectory(sourcePath, output, { quality, recursive, format, generateWebp, forceReplace }, spinner);
         
-        if (results.success === 0 && results.failed === 0) {
+        if (results.success === 0 && results.failed === 0 && results.skipped === 0) {
           spinner.stop();
           console.log(chalk.yellow(`\n⚠ No images found in ${sourcePath}`));
           return;
@@ -149,6 +149,9 @@ program
         spinner.succeed(chalk.green(`\n✓ Compressed ${results.success} files`));
         if (results.skipped > 0) {
           console.log(chalk.gray(`  Skipped: ${results.skipped} files`));
+        }
+        if (results.skippedLarger > 0) {
+          console.log(chalk.gray(`  Skipped (larger after compress): ${results.skippedLarger} files`));
         }
         if (results.webpGenerated > 0) {
           console.log(chalk.cyan(`  WebP generated: ${results.webpGenerated} files`));
@@ -165,7 +168,7 @@ program
           spinner.succeed(chalk.green(`\n✓ Compressed successfully!`));
           console.log(chalk.gray(`  Original: ${result.originalSize} bytes`));
           console.log(chalk.gray(`  Compressed: ${result.compressedSize} bytes`));
-          console.log(chalk.green(`  Saved: ${result.savedPercent}%`));
+          console.log(chalk.green(`  Saved: ${result.savedPercent}`));
           if (result.webpPath) {
             console.log(chalk.cyan(`  WebP: ${result.webpPath}`));
           }
@@ -181,8 +184,8 @@ program
 // 转换为 WebP 命令
 program
   .command('webp')
-  .description('Convert images to WebP format')
-  .argument('<source>', 'Source image file or directory')
+  .description('Convert images to WebP format (default: current directory)')
+  .argument('[source]', 'Source image file or directory (default: current directory)')
   .argument('[output]', 'Output file or directory')
   .option('-q, --quality <number>', 'WebP quality (1-100)')
   .option('-r, --recursive', 'Process directories recursively')
@@ -190,26 +193,40 @@ program
     const spinner = ora('Converting to WebP...').start();
     const config = getConfig();
     
+    const sourcePath = source || process.cwd();
     const quality = options.quality ?? config.quality;
-    const recursive = options.recursive ?? config.recursive;
+    const recursive = options.recursive !== undefined ? options.recursive : true;
     
     try {
-      const stats = fs.statSync(source);
+      const stats = fs.statSync(sourcePath);
       
       if (stats.isDirectory()) {
         spinner.text = 'Processing directory...';
-        const results = await processDirectoryToWebp(source, output, { quality, recursive });
+        const results = await processDirectoryToWebp(sourcePath, output, { quality, recursive }, spinner);
+        
+        if (results.success === 0 && results.failed === 0 && results.skipped === 0) {
+          spinner.stop();
+          console.log(chalk.yellow(`\n⚠ No images found in ${sourcePath}`));
+          return;
+        }
+        
         spinner.succeed(chalk.green(`\n✓ Converted ${results.success} files to WebP`));
+        if (results.skipped > 0) {
+          console.log(chalk.gray(`  Skipped: ${results.skipped} files`));
+        }
         if (results.failed > 0) {
           console.log(chalk.red(`✗ Failed: ${results.failed} files`));
         }
       } else {
-        const result = await convertToWebpSingle(source, output, { quality });
-        if (result.success) {
+        const result = await convertToWebpSingle(sourcePath, output, { quality });
+        if (result.skipped) {
+          spinner.stop();
+          console.log(chalk.yellow(`\n⚠ Skipped: ${result.message}`));
+        } else if (result.success) {
           spinner.succeed(chalk.green(`\n✓ Converted to WebP successfully!`));
           console.log(chalk.gray(`  Original: ${result.originalSize} bytes`));
           console.log(chalk.gray(`  WebP: ${result.convertedSize} bytes`));
-          console.log(chalk.green(`  Saved: ${result.savedPercent}%`));
+          console.log(chalk.green(`  Saved: ${result.savedPercent}`));
         } else {
           spinner.fail(chalk.red(`\n✗ ${result.error}`));
         }
@@ -242,7 +259,7 @@ program
       spinner.succeed(chalk.green(`\n✓ Converted successfully!`));
       console.log(chalk.gray(`  Original: ${result.originalSize} bytes`));
       console.log(chalk.gray(`  Converted: ${result.convertedSize} bytes`));
-      console.log(chalk.green(`  Saved: ${result.savedPercent}%`));
+      console.log(chalk.green(`  Saved: ${result.savedPercent}`));
     } catch (error) {
       spinner.fail(chalk.red(`\n✗ Error: ${error.message}`));
     }
@@ -369,16 +386,23 @@ function generateUniqueOutputPath(originalPath, targetExt, processedFiles) {
   return outputPath;
 }
 
-async function processDirectory(sourceDir, outputDir, options) {
+async function processDirectory(sourceDir, outputDir, options, spinner) {
   const { quality, recursive, format, generateWebp, forceReplace } = options;
   const pattern = recursive 
     ? `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,bmp}`
     : `${sourceDir}/*.{jpg,jpeg,png,gif,tiff,bmp}`;
   
   const files = await glob(pattern, { nodir: true });
-  const results = { success: 0, failed: 0, webpGenerated: 0, skipped: 0 };
+  // 过滤掉 _compressed 等已处理过的文件，避免重复压缩
+  const filteredFiles = files.filter(f => !path.basename(f).includes('_compressed'));
+  const results = { success: 0, failed: 0, webpGenerated: 0, skipped: 0, skippedLarger: 0 };
+  const total = filteredFiles.length;
   
-  for (const file of files) {
+  for (let i = 0; i < filteredFiles.length; i++) {
+    const file = filteredFiles[i];
+    if (spinner) {
+      spinner.text = `Processing [${i + 1}/${total}] ${path.basename(file)}`;
+    }
     try {
       const relativePath = path.relative(sourceDir, file);
       const ext = path.extname(file);
@@ -443,10 +467,21 @@ async function processDirectory(sourceDir, outputDir, options) {
         format: format || undefined
       });
       
-      // 强制替换模式：用压缩后的文件替换原文件
+      // 强制替换模式：如果压缩后更大则跳过替换，否则替换原文件
       if (forceReplace && !outputDir) {
-        const originalExt = ext;
-        const targetExt = format ? `.${format}` : originalExt;
+        const originalSize = fs.statSync(file).size;
+        const compressedSize = fs.statSync(outputPath).size;
+        
+        if (compressedSize >= originalSize) {
+          // 压缩后更大，删除临时文件，保留原文件
+          fs.unlinkSync(outputPath);
+          console.log(chalk.gray(`  Skip (larger): ${file} (${originalSize} → ${compressedSize})`));
+          results.skippedLarger++;
+          results.success++;
+          continue;
+        }
+        
+        const targetExt = format ? `.${format}` : ext;
         const finalPath = path.join(dirName, `${baseName}${targetExt}`);
         fs.unlinkSync(file);
         fs.renameSync(outputPath, finalPath);
@@ -475,18 +510,26 @@ async function processDirectory(sourceDir, outputDir, options) {
   return results;
 }
 
-async function processDirectoryToWebp(sourceDir, outputDir, options) {
+async function processDirectoryToWebp(sourceDir, outputDir, options, spinner) {
   const { quality, recursive } = options;
   const pattern = recursive 
     ? `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,bmp}`
     : `${sourceDir}/*.{jpg,jpeg,png,gif,tiff,bmp}`;
   
   const files = await glob(pattern, { nodir: true });
-  const results = { success: 0, failed: 0 };
+  const filteredFiles = files.filter(f => !path.basename(f).includes('_compressed'));
+  const results = { success: 0, failed: 0, skipped: 0 };
+  const total = filteredFiles.length;
   
-  for (const file of files) {
+  for (let i = 0; i < filteredFiles.length; i++) {
+    const file = filteredFiles[i];
+    if (spinner) {
+      spinner.text = `Converting [${i + 1}/${total}] ${path.basename(file)}`;
+    }
     try {
       const relativePath = path.relative(sourceDir, file);
+      const baseName = path.basename(file, path.extname(file));
+      const dirName = path.dirname(file);
       let outputPath;
       
       if (outputDir) {
@@ -495,9 +538,18 @@ async function processDirectoryToWebp(sourceDir, outputDir, options) {
         if (!fs.existsSync(outDir)) {
           fs.mkdirSync(outDir, { recursive: true });
         }
+        if (fs.existsSync(outputPath)) {
+          console.log(chalk.gray(`  Skip (exists): ${file}`));
+          results.skipped++;
+          continue;
+        }
       } else {
-        const baseName = path.basename(file, path.extname(file));
-        outputPath = path.join(path.dirname(file), `${baseName}.webp`);
+        outputPath = path.join(dirName, `${baseName}.webp`);
+        if (fs.existsSync(outputPath)) {
+          console.log(chalk.gray(`  Skip (WebP exists): ${file}`));
+          results.skipped++;
+          continue;
+        }
       }
       
       await compressImageToWebp(file, outputPath, parseInt(quality));
@@ -556,6 +608,18 @@ async function compressSingleFile(source, output, options) {
   
   // 强制替换模式：用压缩后的文件替换原文件
   if (forceReplace && !output) {
+    const compressedSize = fs.statSync(finalOutput).size;
+    
+    if (compressedSize >= stats.size) {
+      // 压缩后更大，删除临时文件，保留原文件
+      fs.unlinkSync(finalOutput);
+      return { 
+        success: true, 
+        skipped: true, 
+        message: `Compressed file is larger (${stats.size} → ${compressedSize}), kept original` 
+      };
+    }
+    
     const targetExt = format ? `.${format}` : ext;
     const originalPath = path.join(dirName, `${baseName}${targetExt}`);
     fs.unlinkSync(source);
@@ -591,10 +655,16 @@ async function compressSingleFile(source, output, options) {
 async function convertToWebpSingle(source, output, options) {
   const stats = fs.statSync(source);
   const { quality } = options;
+  const baseName = path.basename(source, path.extname(source));
+  const dirName = path.dirname(source);
   
   if (!output) {
-    const baseName = path.basename(source, path.extname(source));
-    output = path.join(path.dirname(source), `${baseName}.webp`);
+    output = path.join(dirName, `${baseName}.webp`);
+  }
+  
+  // 检查是否已存在 webp
+  if (fs.existsSync(output)) {
+    return { success: true, skipped: true, message: 'WebP file already exists' };
   }
   
   await compressImageToWebp(source, output, parseInt(quality));

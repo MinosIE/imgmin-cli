@@ -17,6 +17,7 @@ export async function glob(pattern, options = {}) {
   // 解析 pattern，提取目录和扩展名
   let baseDir = pattern;
   let extensions = [];
+  let recursive = true; // 默认递归
   
   // 检查是否是递归模式 img/**/*.{ext1,ext2}
   if (pattern.includes('/**/*')) {
@@ -37,13 +38,14 @@ export async function glob(pattern, options = {}) {
     const parts = pattern.split('/*.');
     baseDir = parts[0];
     extensions = [parts[1].toLowerCase()];
+    recursive = false;
   }
   
   if (!fs.existsSync(baseDir)) {
     return files;
   }
   
-  await scanDir(baseDir, files, extensions, nodir);
+  await scanDir(baseDir, files, extensions, nodir, recursive);
   
   return files;
 }
@@ -51,14 +53,14 @@ export async function glob(pattern, options = {}) {
 /**
  * 递归扫描目录
  */
-async function scanDir(dir, files, extensions, nodir) {
+async function scanDir(dir, files, extensions, nodir, recursive) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
     
-    if (entry.isDirectory()) {
-      await scanDir(fullPath, files, extensions, nodir);
+    if (entry.isDirectory() && recursive) {
+      await scanDir(fullPath, files, extensions, nodir, recursive);
     } else if (entry.isFile()) {
       if (nodir) {
         const ext = path.extname(entry.name).toLowerCase().slice(1); // 去掉点的扩展名
