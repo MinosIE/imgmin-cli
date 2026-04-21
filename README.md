@@ -34,17 +34,23 @@ imgmin webp ./images -r   # 批量转换为 webp
 imgmin
 
 # 直接运行，自动处理当前目录及其子目录下的所有图片
-# - 非 WebP 格式：转换为 WebP 并压缩
-# - WebP 格式：仅压缩优化
-# - 自动处理文件名冲突
+# - 非 WebP 格式：转换为 WebP 并压缩（输出到原目录）
+# - WebP 格式：压缩优化
+# - 自动处理文件名冲突（添加 _1, _2 等后缀）
 ```
 
 **特性：**
 - 零配置运行，无需任何参数
 - 递归扫描当前目录及所有子目录
 - 自动转换为 WebP 格式（节省最多 80% 体积）
+- WebP 格式文件也会被压缩优化
 - 智能文件名管理，避免覆盖原文件
 - 显示详细统计信息
+
+**输出说明：**
+- 生成的 `.webp` 文件保存在**原图片所在目录**
+- 如果同名文件已存在，自动添加数字后缀（如 `photo_1.webp`, `photo_2.webp`）
+- 不会删除或修改原始图片文件
 
 ### config - 配置管理
 
@@ -71,7 +77,7 @@ imgmin config -r               # 重置所有配置
 |---|---|---|---|
 | `quality` | number | 80 | 压缩质量 1-100 |
 | `format` | string | - | 默认输出格式 |
-| `recursive` | boolean | false | 是否递归处理目录 |
+| `recursive` | boolean | false | 是否递归处理目录（注：compress/webp 命令实际默认递归，此配置仅影响其他命令） |
 | `outputDir` | string | - | 默认输出目录 |
 
 配置文件位于 `~/.imgminrc`
@@ -83,20 +89,31 @@ imgmin compress <source> [output] [options]
 imgmin c <source> [output] [options]          # 使用别名
 
 # 示例
-imgmin c input.jpg                            # 压缩单张图片
+imgmin c input.jpg                            # 压缩单张图片，生成 input_compressed.jpg 和 input.webp
 imgmin c input.png -q 85                      # 设置质量
 imgmin c input.jpg output.webp -f webp        # 输出为 webp
-imgmin c ./images ./output -r                 # 批量压缩目录
+imgmin c ./images ./output -r                 # 批量压缩目录到输出文件夹
+imgmin c input.jpg --force                    # 强制替换原文件（不生成 _compressed 后缀）
+imgmin c input.jpg --no-webp                  # 只压缩，不生成 WebP 版本
 ```
 
 **选项：**
 - `-q, --quality <number>` - 质量 1-100（默认使用配置）
-- `-r, --recursive` - 递归处理子目录
-- `-f, --format <type>` - 输出格式（jpeg, png, webp, avif）
+- `-r, --recursive` - 递归处理子目录（默认启用，使用 --no-recursive 关闭）
+- `-f, --format <type>` - 输出格式（jpeg, png, webp, avif, tiff, gif）
+- `--no-webp` - 不生成 WebP 版本
+- `--force` - 用压缩后的文件替换原文件（无 `_compressed` 后缀）
+
+**输出行为：**
+- **无 output 参数时**：在原目录生成 `<filename>_compressed.<ext>` 和 `<filename>.webp`
+- **有 output 参数时**：输出到指定文件或目录
+- **使用 `--force` 时**：直接替换原文件（如果压缩后更小）
+- **默认同时生成 WebP**：除非使用 `--no-webp` 禁用
 
 **提示：** 
 - 使用 `imgmin` 默认命令可以快速批量转换整个目录
 - `c` 是 `compress` 的简短形式，两者功能完全相同
+- 如果压缩后文件更大，会自动跳过替换（`--force` 模式下）
 
 ### webp - 转换为 WebP
 
@@ -106,12 +123,17 @@ imgmin webp <source> [output] [options]
 # 示例
 imgmin webp input.png                        # 转换为 input.webp
 imgmin webp input.jpg -q 75                  # 设置质量
-imgmin webp ./images ./output -r             # 批量转换
+imgmin webp ./images ./output -r             # 批量转换到输出目录
 ```
 
 **选项：**
 - `-q, --quality <number>` - 质量 1-100
-- `-r, --recursive` - 递归处理子目录
+- `-r, --recursive` - 递归处理子目录（默认启用，使用 --no-recursive 关闭）
+
+**输出行为：**
+- **无 output 参数时**：在原目录生成 `<filename>.webp`
+- **有 output 参数时**：输出到指定文件或目录
+- **跳过已存在的文件**：如果目标 `.webp` 文件已存在，自动跳过
 
 **提示：** 使用 `imgmin c` 命令会同时压缩并生成 webp，更方便！
 
@@ -128,6 +150,10 @@ imgmin convert photo.jpg photo.tiff
 **选项：**
 - `-q, --quality <number>` - 质量 1-100
 
+**支持的格式：**
+- **输入：** JPEG, JPG, PNG, GIF, WebP, TIFF, TIF, BMP, SVG, AVIF
+- **输出：** JPEG, JPG, PNG, WebP, AVIF, TIFF, GIF
+
 ### info - 查看图片信息
 
 ```bash
@@ -139,9 +165,9 @@ imgmin info input.jpg
 
 ## 支持格式
 
-**输入：** JPEG, PNG, GIF, WebP, TIFF, BMP, SVG, AVIF
+**输入：** JPEG, JPG, PNG, GIF, WebP, TIFF, TIF, BMP, SVG, AVIF
 
-**输出：** JPEG, PNG, WebP, AVIF, TIFF, GIF
+**输出：** JPEG, JPG, PNG, WebP, AVIF, TIFF, GIF
 
 ## 📚 API 使用（Node.js 模块）
 
@@ -161,10 +187,18 @@ npm install imgmin-cli
 import { compressImage } from 'imgmin-cli/src/compress.js';
 
 // 压缩单张图片
-await compressImage('input.jpg', 'output.jpg', { 
+const result = await compressImage('input.jpg', 'output.jpg', { 
   quality: 80,
   format: 'jpeg' 
 });
+
+console.log(result);
+// {
+//   input: 'input.jpg',
+//   output: 'output.jpg',
+//   originalSize: 1234567,
+//   compressedSize: 987654
+// }
 
 // 转换为 WebP
 await compressImage('input.png', 'output.webp', { 
@@ -178,7 +212,46 @@ await compressImage('input.png', 'output.webp', {
 import { compressImageToWebp } from 'imgmin-cli/src/compress.js';
 
 // 转换并指定质量
-await compressImageToWebp('input.png', 'output.webp', 80);
+const result = await compressImageToWebp('input.png', 'output.webp', 80);
+
+console.log(result);
+// {
+//   input: 'input.png',
+//   output: 'output.webp',
+//   originalSize: 1234567,
+//   compressedSize: 456789
+// }
+```
+
+#### 调整图片尺寸
+
+```javascript
+import { resizeImage } from 'imgmin-cli/src/compress.js';
+
+// 调整尺寸
+await resizeImage('input.jpg', 'output.jpg', {
+  width: 800,
+  height: 600,
+  fit: 'inside'  // cover, contain, fill, inside, outside
+});
+```
+
+#### 批量压缩目录
+
+```javascript
+import { compressDirectory } from 'imgmin-cli/src/compress.js';
+
+// 批量压缩目录下所有图片
+const results = await compressDirectory('./input', './output', {
+  quality: 80,
+  format: 'webp'
+});
+
+console.log(results);
+// [
+//   { input: '...', output: '...', originalSize: ..., compressedSize: ..., status: 'success' },
+//   { file: '...', error: '...', status: 'failed' }
+// ]
 ```
 
 #### 格式转换
@@ -187,9 +260,19 @@ await compressImageToWebp('input.png', 'output.webp', 80);
 import { convertImage } from 'imgmin-cli/src/convert.js';
 
 // PNG 转 JPEG
-await convertImage('input.png', 'output.jpg', { 
+const result = await convertImage('input.png', 'output.jpg', { 
   quality: 90 
 });
+
+console.log(result);
+// {
+//   input: 'input.png',
+//   output: 'output.jpg',
+//   format: 'jpeg',
+//   originalSize: 1234567,
+//   convertedSize: 987654,
+//   savedPercent: '20.0'
+// }
 ```
 
 #### 获取图片信息
@@ -201,13 +284,29 @@ const info = await getImageInfo('photo.jpg');
 console.log(info);
 // {
 //   fileName: 'photo.jpg',
+//   filePath: '/path/to/photo.jpg',
 //   size: 1234567,
 //   format: 'jpeg',
 //   width: 1920,
 //   height: 1080,
 //   hasAlpha: false,
-//   density: 72
+//   channels: 3,
+//   density: 72,
+//   space: 'srgb',
+//   depth: 'uchar',
+//   orientation: undefined
 // }
+```
+
+#### 文件匹配工具
+
+```javascript
+import { glob } from 'imgmin-cli/src/utils.js';
+
+// 匹配所有图片文件
+const files = await glob('./images/**/*.{jpg,png,gif}', { nodir: true });
+console.log(files);
+// ['/path/to/image1.jpg', '/path/to/image2.png', ...]
 ```
 
 ## 依赖

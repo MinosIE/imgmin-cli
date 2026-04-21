@@ -29,7 +29,12 @@ program
       console.log(chalk.cyan('\n📊 Summary:\n'));
       console.log(chalk.white(`  Processed: ${results.success} files`));
       console.log(chalk.white(`  Converted to WebP: ${results.converted} files`));
-      console.log(chalk.white(`  Skipped (already WebP): ${results.skipped} files`));
+      if (results.webpOptimized > 0) {
+        console.log(chalk.white(`  WebP optimized: ${results.webpOptimized} files`));
+      }
+      if (results.skipped > 0) {
+        console.log(chalk.gray(`  Skipped: ${results.skipped} files`));
+      }
       if (results.failed > 0) {
         console.log(chalk.red(`  Failed: ${results.failed} files`));
       }
@@ -116,7 +121,7 @@ program
   .argument('[output]', 'Output file or directory')
   .option('-q, --quality <number>', 'JPEG/WebP quality (1-100)')
   .option('-r, --recursive', 'Process directories recursively')
-  .option('-f, --format <type>', 'Output format (jpeg, png, webp, avif)')
+  .option('-f, --format <type>', 'Output format (jpeg, png, webp, avif, tiff, gif)')
   .option('--no-webp', 'Do not generate WebP versions')
   .option('--force', 'Replace original file with compressed version (no _compressed suffix)')
   .action(async (source, output, options) => {
@@ -292,7 +297,7 @@ program
 
 // 批量处理函数 - 处理所有图片并转换为 WebP
 async function processAllImagesToWebp(sourceDir, config) {
-  const pattern = `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,bmp,webp}`;
+  const pattern = `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,bmp,svg,avif,webp}`;
   const files = await glob(pattern, { nodir: true });
   
   // 过滤掉已经是 webp 的文件（只压缩不转换）
@@ -302,12 +307,13 @@ async function processAllImagesToWebp(sourceDir, config) {
   // 检查是否有可处理的图片
   if (imageFiles.length === 0 && webpFiles.length === 0) {
     console.log(chalk.yellow(`\n⚠ No images found in current directory`));
-    console.log(chalk.gray(`  Supported formats: jpg, jpeg, png, gif, tiff, bmp`));
+    console.log(chalk.gray(`  Supported formats: jpg, jpeg, png, gif, tiff, bmp, svg, avif`));
     console.log(chalk.gray(`  Run 'imgmin --help' for usage information\n`));
     return { 
       success: 0, 
       converted: 0,
       skipped: 0,
+      webpOptimized: 0,
       failed: 0,
       totalSavedPercent: '0.0'
     };
@@ -316,7 +322,8 @@ async function processAllImagesToWebp(sourceDir, config) {
   const results = { 
     success: 0, 
     converted: 0,
-    skipped: webpFiles.length,
+    skipped: 0,
+    webpOptimized: 0,
     failed: 0,
     totalOriginalSize: 0,
     totalConvertedSize: 0
@@ -336,7 +343,7 @@ async function processAllImagesToWebp(sourceDir, config) {
       if (isAlreadyWebp) {
         // 已经是 WebP 格式，只压缩不转换
         await compressImageToWebp(file, outputPath, config.quality);
-        results.skipped++;
+        results.webpOptimized++;
       } else {
         // 转换为 WebP
         await compressImageToWebp(file, outputPath, config.quality);
@@ -389,8 +396,8 @@ function generateUniqueOutputPath(originalPath, targetExt, processedFiles) {
 async function processDirectory(sourceDir, outputDir, options, spinner) {
   const { quality, recursive, format, generateWebp, forceReplace } = options;
   const pattern = recursive 
-    ? `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,bmp}`
-    : `${sourceDir}/*.{jpg,jpeg,png,gif,tiff,bmp}`;
+    ? `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,bmp,svg,avif}`
+    : `${sourceDir}/*.{jpg,jpeg,png,gif,tiff,bmp,svg,avif}`;
   
   const files = await glob(pattern, { nodir: true });
   // 过滤掉 _compressed 等已处理过的文件，避免重复压缩
@@ -513,8 +520,8 @@ async function processDirectory(sourceDir, outputDir, options, spinner) {
 async function processDirectoryToWebp(sourceDir, outputDir, options, spinner) {
   const { quality, recursive } = options;
   const pattern = recursive 
-    ? `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,bmp}`
-    : `${sourceDir}/*.{jpg,jpeg,png,gif,tiff,bmp}`;
+    ? `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,bmp,svg,avif}`
+    : `${sourceDir}/*.{jpg,jpeg,png,gif,tiff,bmp,svg,avif}`;
   
   const files = await glob(pattern, { nodir: true });
   const filteredFiles = files.filter(f => !path.basename(f).includes('_compressed'));
