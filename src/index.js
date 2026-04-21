@@ -111,38 +111,64 @@ program
 program
   .command('compress')
   .alias('c')
-  .description('Compress image files')
-  .argument('<source>', 'Source image file or directory')
+  .description('Compress image files and generate WebP (default: current directory)')
+  .argument('[source]', 'Source image file or directory (default: current directory)')
   .argument('[output]', 'Output file or directory')
   .option('-q, --quality <number>', 'JPEG/WebP quality (1-100)')
   .option('-r, --recursive', 'Process directories recursively')
   .option('-f, --format <type>', 'Output format (jpeg, png, webp, avif)')
+  .option('--no-webp', 'Do not generate WebP versions')
+  .option('--force', 'Replace original file with compressed version (no _compressed suffix)')
   .action(async (source, output, options) => {
-    const spinner = ora('Processing...').start();
     const config = getConfig();
     
-    // 合并配置
+    // 如果没有提供 source，使用当前目录
+    const sourcePath = source || process.cwd();
+    // recursive 默认 true，除非用户明确设置 --no-recursive
+    const recursive = options.recursive !== undefined ? options.recursive : true;
     const quality = options.quality ?? config.quality;
-    const recursive = options.recursive ?? config.recursive;
     const format = options.format ?? config.format;
+    const generateWebp = options.webp !== false; // 默认生成 webp
+    const forceReplace = options.force || false;
+    
+    const spinner = ora('Processing...').start();
     
     try {
-      const stats = fs.statSync(source);
+      const stats = fs.statSync(sourcePath);
       
       if (stats.isDirectory()) {
         spinner.text = 'Processing directory...';
-        const results = await processDirectory(source, output, { quality, recursive, format });
+        const results = await processDirectory(sourcePath, output, { quality, recursive, format, generateWebp, forceReplace });
+        
+        if (results.success === 0 && results.failed === 0) {
+          spinner.stop();
+          console.log(chalk.yellow(`\n⚠ No images found in ${sourcePath}`));
+          return;
+        }
+        
         spinner.succeed(chalk.green(`\n✓ Compressed ${results.success} files`));
+        if (results.skipped > 0) {
+          console.log(chalk.gray(`  Skipped: ${results.skipped} files`));
+        }
+        if (results.webpGenerated > 0) {
+          console.log(chalk.cyan(`  WebP generated: ${results.webpGenerated} files`));
+        }
         if (results.failed > 0) {
           console.log(chalk.red(`✗ Failed: ${results.failed} files`));
         }
       } else {
-        const result = await compressSingleFile(source, output, { quality, format });
-        if (result.success) {
+        const result = await compressSingleFile(sourcePath, output, { quality, format, generateWebp, forceReplace });
+        if (result.skipped) {
+          spinner.stop();
+          console.log(chalk.yellow(`\n⚠ Skipped: ${result.message}`));
+        } else if (result.success) {
           spinner.succeed(chalk.green(`\n✓ Compressed successfully!`));
           console.log(chalk.gray(`  Original: ${result.originalSize} bytes`));
           console.log(chalk.gray(`  Compressed: ${result.compressedSize} bytes`));
           console.log(chalk.green(`  Saved: ${result.savedPercent}%`));
+          if (result.webpPath) {
+            console.log(chalk.cyan(`  WebP: ${result.webpPath}`));
+          }
         } else {
           spinner.fail(chalk.red(`\n✗ ${result.error}`));
         }
@@ -252,10 +278,28 @@ async function processAllImagesToWebp(sourceDir, config) {
   const pattern = `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,bmp,webp}`;
   const files = await glob(pattern, { nodir: true });
   
+  // 过滤掉已经是 webp 的文件（只压缩不转换）
+  const imageFiles = files.filter(f => !f.toLowerCase().endsWith('.webp'));
+  const webpFiles = files.filter(f => f.toLowerCase().endsWith('.webp'));
+  
+  // 检查是否有可处理的图片
+  if (imageFiles.length === 0 && webpFiles.length === 0) {
+    console.log(chalk.yellow(`\n⚠ No images found in current directory`));
+    console.log(chalk.gray(`  Supported formats: jpg, jpeg, png, gif, tiff, bmp`));
+    console.log(chalk.gray(`  Run 'imgmin --help' for usage information\n`));
+    return { 
+      success: 0, 
+      converted: 0,
+      skipped: 0,
+      failed: 0,
+      totalSavedPercent: '0.0'
+    };
+  }
+  
   const results = { 
     success: 0, 
     converted: 0,
-    skipped: 0,
+    skipped: webpFiles.length,
     failed: 0,
     totalOriginalSize: 0,
     totalConvertedSize: 0
@@ -326,36 +370,102 @@ function generateUniqueOutputPath(originalPath, targetExt, processedFiles) {
 }
 
 async function processDirectory(sourceDir, outputDir, options) {
-  const { quality, recursive, format } = options;
+  const { quality, recursive, format, generateWebp, forceReplace } = options;
   const pattern = recursive 
     ? `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,bmp}`
     : `${sourceDir}/*.{jpg,jpeg,png,gif,tiff,bmp}`;
   
   const files = await glob(pattern, { nodir: true });
-  const results = { success: 0, failed: 0 };
+  const results = { success: 0, failed: 0, webpGenerated: 0, skipped: 0 };
   
   for (const file of files) {
     try {
       const relativePath = path.relative(sourceDir, file);
-      let outputPath;
+      const ext = path.extname(file);
+      const baseName = path.basename(file, ext);
+      const dirName = path.dirname(file);
       
+      // 检查是否需要跳过（文件已处理过）
+      if (outputDir) {
+        // 有输出目录时，只检查输出文件是否存在
+        const targetExt = format ? `.${format}` : ext;
+        const outputPath = path.join(outputDir, relativePath.replace(/\.[^.]+$/, targetExt));
+        if (fs.existsSync(outputPath)) {
+          console.log(chalk.gray(`  Skip (exists): ${file}`));
+          results.skipped++;
+          continue;
+        }
+      } else if (!forceReplace) {
+        // 非强制替换模式，检查压缩文件和 webp 是否存在
+        const compressedPath = path.join(dirName, `${baseName}_compressed${ext}`);
+        if (fs.existsSync(compressedPath)) {
+          console.log(chalk.gray(`  Skip (compressed): ${file}`));
+          results.skipped++;
+          continue;
+        }
+        
+        if (generateWebp) {
+          const webpPath = path.join(dirName, `${baseName}.webp`);
+          if (fs.existsSync(webpPath)) {
+            console.log(chalk.gray(`  Skip (WebP exists): ${file}`));
+            results.skipped++;
+            continue;
+          }
+        }
+      } else if (generateWebp) {
+        // 强制替换模式下，只检查 webp 是否存在
+        const webpPath = path.join(dirName, `${baseName}.webp`);
+        if (fs.existsSync(webpPath)) {
+          console.log(chalk.gray(`  Skip (WebP exists): ${file}`));
+          results.skipped++;
+          continue;
+        }
+      }
+      
+      let outputPath;
       if (outputDir) {
         outputPath = path.join(outputDir, relativePath);
         const outDir = path.dirname(outputPath);
         if (!fs.existsSync(outDir)) {
           fs.mkdirSync(outDir, { recursive: true });
         }
+      } else if (forceReplace) {
+        // 强制替换模式：先输出到临时文件，再替换原文件
+        const outExt = format ? `.${format}` : ext;
+        outputPath = path.join(dirName, `${baseName}_imgmin_tmp${outExt}`);
       } else {
-        const ext = format ? `.${format}` : path.extname(file);
-        const baseName = path.basename(file, path.extname(file));
-        outputPath = path.join(path.dirname(file), `${baseName}_compressed${ext}`);
+        const outExt = format ? `.${format}` : ext;
+        outputPath = path.join(dirName, `${baseName}_compressed${outExt}`);
       }
       
       await compressImage(file, outputPath, {
         quality: parseInt(quality),
         format: format || undefined
       });
+      
+      // 强制替换模式：用压缩后的文件替换原文件
+      if (forceReplace && !outputDir) {
+        const originalExt = ext;
+        const targetExt = format ? `.${format}` : originalExt;
+        const finalPath = path.join(dirName, `${baseName}${targetExt}`);
+        fs.unlinkSync(file);
+        fs.renameSync(outputPath, finalPath);
+        outputPath = finalPath;
+      }
+      
       results.success++;
+      
+      // 同时生成 WebP 版本
+      if (generateWebp) {
+        try {
+          const webpPath = path.join(dirName, `${baseName}.webp`);
+          // 读取源文件用于 webp 转换（forceReplace 下源文件可能已被替换）
+          await compressImageToWebp(forceReplace ? outputPath : file, webpPath, parseInt(quality));
+          results.webpGenerated++;
+        } catch (webpError) {
+          console.log(chalk.yellow(`\n⚠ WebP skipped: ${file} - ${webpError.message}`));
+        }
+      }
     } catch (error) {
       console.log(chalk.yellow(`\n⚠ Failed: ${file} - ${error.message}`));
       results.failed++;
@@ -403,29 +513,79 @@ async function processDirectoryToWebp(sourceDir, outputDir, options) {
 
 async function compressSingleFile(source, output, options) {
   const stats = fs.statSync(source);
-  const { quality, format } = options;
+  const { quality, format, generateWebp, forceReplace } = options;
+  const ext = path.extname(source);
+  const baseName = path.basename(source, ext);
+  const dirName = path.dirname(source);
   
-  if (!output) {
-    const ext = format ? `.${format}` : path.extname(source);
-    const baseName = path.basename(source, path.extname(source));
-    output = path.join(path.dirname(source), `${baseName}_compressed${ext}`);
+  // 检查是否需要跳过
+  if (!output && !forceReplace) {
+    const compressedPath = path.join(dirName, `${baseName}_compressed${ext}`);
+    if (fs.existsSync(compressedPath)) {
+      return { success: true, skipped: true, message: 'Compressed file already exists' };
+    }
+    
+    if (generateWebp) {
+      const webpPath = path.join(dirName, `${baseName}.webp`);
+      if (fs.existsSync(webpPath)) {
+        return { success: true, skipped: true, message: 'WebP file already exists' };
+      }
+    }
+  } else if (!output && forceReplace && generateWebp) {
+    const webpPath = path.join(dirName, `${baseName}.webp`);
+    if (fs.existsSync(webpPath)) {
+      return { success: true, skipped: true, message: 'WebP file already exists' };
+    }
   }
   
-  await compressImage(source, output, {
+  let finalOutput;
+  if (output) {
+    finalOutput = output;
+  } else if (forceReplace) {
+    // 强制替换模式：先输出到临时文件
+    const outExt = format ? `.${format}` : ext;
+    finalOutput = path.join(dirName, `${baseName}_imgmin_tmp${outExt}`);
+  } else {
+    finalOutput = path.join(dirName, `${baseName}_compressed${ext}`);
+  }
+  
+  await compressImage(source, finalOutput, {
     quality: parseInt(quality),
     format: format || undefined
   });
   
-  const originalSize = stats.size;
-  const compressedSize = fs.statSync(output).size;
-  const savedPercent = ((originalSize - compressedSize) / originalSize * 100).toFixed(1);
+  // 强制替换模式：用压缩后的文件替换原文件
+  if (forceReplace && !output) {
+    const targetExt = format ? `.${format}` : ext;
+    const originalPath = path.join(dirName, `${baseName}${targetExt}`);
+    fs.unlinkSync(source);
+    fs.renameSync(finalOutput, originalPath);
+    finalOutput = originalPath;
+  }
   
-  return {
+  const compressedSize = fs.statSync(finalOutput).size;
+  const savedPercent = ((stats.size - compressedSize) / stats.size * 100).toFixed(1);
+  
+  const result = {
     success: true,
-    originalSize,
+    originalSize: stats.size,
     compressedSize,
     savedPercent: `${savedPercent}%`
   };
+  
+  // 同时生成 WebP 版本
+  if (generateWebp) {
+    try {
+      const webpPath = path.join(dirName, `${baseName}.webp`);
+      
+      await compressImageToWebp(forceReplace ? finalOutput : source, webpPath, parseInt(quality));
+      result.webpPath = webpPath;
+    } catch (webpError) {
+      console.log(chalk.yellow(`\n⚠ WebP skipped: ${source} - ${webpError.message}`));
+    }
+  }
+  
+  return result;
 }
 
 async function convertToWebpSingle(source, output, options) {

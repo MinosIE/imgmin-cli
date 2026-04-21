@@ -21,9 +21,9 @@ cd /path/to/images
 imgmin                    # 自动处理所有图片！
 
 # 或者使用具体命令
-imgmin compress photo.jpg
-imgmin c photo.jpg        # 使用短别名
-imgmin webp ./images -r
+imgmin c photo.jpg        # 压缩并生成 webp
+imgmin c .                # 压缩当前目录所有图片
+imgmin webp ./images -r   # 批量转换为 webp
 ```
 
 ## 命令
@@ -40,11 +40,11 @@ imgmin
 ```
 
 **特性：**
-- 🚀 零配置运行，无需任何参数
-- 📁 递归扫描当前目录及所有子目录
-- 🔄 自动转换为 WebP 格式（节省最多 80% 体积）
-- 🛡️ 智能文件名管理，避免覆盖原文件
-- 📊 显示详细统计信息
+- 零配置运行，无需任何参数
+- 递归扫描当前目录及所有子目录
+- 自动转换为 WebP 格式（节省最多 80% 体积）
+- 智能文件名管理，避免覆盖原文件
+- 显示详细统计信息
 
 ### config - 配置管理
 
@@ -58,7 +58,7 @@ imgmin config quality 85      # 设置质量为 85
 imgmin config quality true     # 设置为布尔值
 imgmin config -g               # 显示配置文件路径
 imgmin config -d quality       # 删除配置项（恢复默认值）
-imgmin config -r                # 重置所有配置
+imgmin config -r               # 重置所有配置
 ```
 
 **选项：**
@@ -79,21 +79,38 @@ imgmin config -r                # 重置所有配置
 ### compress / c - 压缩图片
 
 ```bash
-imgmin compress <source> [output] [options]
-imgmin c <source> [output] [options]        # 使用别名
+imgmin compress [source] [output] [options]
+imgmin c [source] [output] [options]          # 使用别名
 
 # 示例
-imgmin compress input.jpg                    # 压缩单张
-imgmin c input.jpg                           # 使用短别名
-imgmin compress input.png -q 85              # 设置质量
-imgmin compress input.jpg output.webp -f webp # 输出为 webp
-imgmin compress ./images ./output -r         # 批量压缩目录
+imgmin c                                      # 压缩当前目录所有图片（默认行为）
+imgmin c .                                    # 同上
+imgmin c input.jpg                            # 压缩单张图片
+imgmin c input.png -q 85                      # 设置质量
+imgmin c input.jpg -f webp                    # 输出为 webp 格式
+imgmin c ./images ./output -r                 # 批量压缩目录
+imgmin c . --force                            # 直接替换原文件（不添加 _compressed 后缀）
+imgmin c . --no-webp                          # 不生成 webp 版本
+imgmin c . --force --no-webp                  # 只替换原文件，不生成 webp
 ```
 
 **选项：**
-- `-q, --quality <number>` - 质量 1-100（默认使用配置）
-- `-r, --recursive` - 递归处理子目录
+- `-q, --quality <number>` - 质量 1-100（默认使用配置值 80）
+- `-r, --recursive` - 递归处理子目录（默认开启）
 - `-f, --format <type>` - 输出格式（jpeg, png, webp, avif）
+- `--force` - 直接替换原文件，不添加 `_compressed` 后缀
+- `--no-webp` - 不生成 WebP 版本
+
+**默认行为：**
+- 不指定 source 时，自动扫描当前目录及子目录下所有图片
+- 压缩后生成 `xxx_compressed.jpg`（保留原文件）
+- 同时生成 `xxx.webp` 版本
+- 已存在压缩文件或 webp 文件的图片会自动跳过
+
+**`--force` 模式：**
+- 用压缩后的文件直接替换原文件（不保留原文件）
+- 不添加 `_compressed` 后缀
+- webp 生成逻辑不变
 
 **别名：**
 - `c` - `compress` 的简短形式
@@ -113,7 +130,7 @@ imgmin webp ./images ./output -r             # 批量转换
 - `-q, --quality <number>` - 质量 1-100
 - `-r, --recursive` - 递归处理子目录
 
-**提示：** 使用默认命令 `imgmin` 可以更快地批量转换为 WebP！
+**提示：** 使用 `imgmin c` 命令会同时压缩并生成 webp，更方便！
 
 ### convert - 格式转换
 

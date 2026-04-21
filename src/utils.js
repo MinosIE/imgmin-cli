@@ -14,22 +14,29 @@ export async function glob(pattern, options = {}) {
   const files = [];
   const { nodir = true } = options;
   
-  // 解析 pattern
+  // 解析 pattern，提取目录和扩展名
   let baseDir = pattern;
   let extensions = [];
   
-  // 提取目录和扩展名
-  const extMatch = pattern.match(/^(.+)\/\*\*\/\*\{(.+)\}$/);
-  if (extMatch) {
-    baseDir = extMatch[1];
-    extensions = extMatch[2].split(',').map(e => e.startsWith('.') ? e : `.${e}`);
-  } else {
-    const singleExtMatch = pattern.match(/^(.+)\/\*\.(.+)$/);
-    if (singleExtMatch) {
-      baseDir = singleExtMatch[1];
-      const ext = singleExtMatch[2].startsWith('.') ? singleExtMatch[2] : `.${singleExtMatch[2]}`;
-      extensions = [ext];
+  // 检查是否是递归模式 img/**/*.{ext1,ext2}
+  if (pattern.includes('/**/*')) {
+    const parts = pattern.split('/**/*');
+    baseDir = parts[0];
+    const extPart = parts[1];
+    
+    // 提取 {ext1,ext2,...} 格式，如 .{jpg,png}
+    const braceMatch = extPart.match(/^\.\{(.+)\}$/);
+    if (braceMatch) {
+      extensions = braceMatch[1].split(',').map(e => e.toLowerCase());
+    } else {
+      // 单扩展名如 .png
+      extensions = [extPart.startsWith('.') ? extPart.slice(1) : extPart];
     }
+  } else if (pattern.includes('/*.')) {
+    // 非递归模式 img/*.png
+    const parts = pattern.split('/*.');
+    baseDir = parts[0];
+    extensions = [parts[1].toLowerCase()];
   }
   
   if (!fs.existsSync(baseDir)) {
@@ -54,7 +61,7 @@ async function scanDir(dir, files, extensions, nodir) {
       await scanDir(fullPath, files, extensions, nodir);
     } else if (entry.isFile()) {
       if (nodir) {
-        const ext = path.extname(entry.name).toLowerCase();
+        const ext = path.extname(entry.name).toLowerCase().slice(1); // 去掉点的扩展名
         if (extensions.length === 0 || extensions.includes(ext)) {
           files.push(fullPath);
         }
