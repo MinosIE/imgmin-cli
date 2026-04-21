@@ -4,6 +4,7 @@ import ora from 'ora';
 import { compressImage, compressImageToWebp } from './compress.js';
 import { convertImage } from './convert.js';
 import { getImageInfo, glob } from './utils.js';
+import { getConfig, setConfigValue, resetConfigValue, resetConfig, getConfigPath, hasConfigFile } from './config.js';
 import path from 'path';
 import fs from 'fs';
 
@@ -14,30 +15,129 @@ program
   .description('A powerful CLI tool for compressing and converting images')
   .version('1.0.0');
 
+// 默认命令 - 当没有提供子命令时执行
+program
+  .action(async () => {
+    const spinner = ora('Scanning and processing images...').start();
+    const config = getConfig();
+    
+    try {
+      const currentDir = process.cwd();
+      const results = await processAllImagesToWebp(currentDir, config);
+      
+      spinner.succeed(chalk.green(`\n✓ Processing complete!`));
+      console.log(chalk.cyan('\n📊 Summary:\n'));
+      console.log(chalk.white(`  Processed: ${results.success} files`));
+      console.log(chalk.white(`  Converted to WebP: ${results.converted} files`));
+      console.log(chalk.white(`  Skipped (already WebP): ${results.skipped} files`));
+      if (results.failed > 0) {
+        console.log(chalk.red(`  Failed: ${results.failed} files`));
+      }
+      console.log(chalk.green(`  Total saved: ${results.totalSavedPercent}%`));
+      console.log();
+    } catch (error) {
+      spinner.fail(chalk.red(`\n✗ Error: ${error.message}`));
+    }
+  });
+
+// 配置命令
+program
+  .command('config')
+  .description('Manage configuration')
+  .argument('[key]', 'Configuration key to view or set')
+  .argument('[value]', 'Value to set (omit to view)')
+  .option('-g, --global', 'Show global config file path')
+  .option('-r, --reset', 'Reset all configuration')
+  .option('-d, --delete <key>', 'Delete a specific configuration key')
+  .action((key, value, options) => {
+    if (options.global) {
+      console.log(chalk.cyan(`\n📁 Config file: ${getConfigPath()}\n`));
+      return;
+    }
+    
+    if (options.reset) {
+      resetConfig();
+      console.log(chalk.green(`\n✓ Configuration reset to defaults\n`));
+      return;
+    }
+    
+    if (options.delete) {
+      const deleted = resetConfigValue(options.delete);
+      if (deleted) {
+        console.log(chalk.green(`\n✓ Deleted config: ${options.delete}\n`));
+      } else {
+        console.log(chalk.red(`\n✗ Unknown config key: ${options.delete}\n`));
+      }
+      return;
+    }
+    
+    if (key) {
+      if (value !== undefined) {
+        // 设置值
+        let parsedValue = value;
+        
+        // 布尔值转换
+        if (value === 'true') parsedValue = true;
+        else if (value === 'false') parsedValue = false;
+        // 数字转换
+        else if (!isNaN(value) && value !== '') parsedValue = Number(value);
+        
+        setConfigValue(key, parsedValue);
+        console.log(chalk.green(`\n✓ Set ${key} = ${chalk.bold(value)}\n`));
+      } else {
+        // 查看单个值
+        const config = getConfig();
+        if (key in config) {
+          console.log(chalk.cyan(`\n${key} = ${chalk.bold(config[key])}\n`));
+        } else {
+          console.log(chalk.red(`\n✗ Unknown config key: ${key}\n`));
+        }
+      }
+    } else {
+      // 查看所有配置
+      const config = getConfig();
+      console.log(chalk.cyan('\n⚙️  Configuration\n'));
+      for (const [k, v] of Object.entries(config)) {
+        const displayValue = v === '' ? '(none)' : v;
+        const color = v === '' ? 'gray' : 'white';
+        console.log(chalk[color](`  ${chalk.bold(k.padEnd(12))} ${displayValue}`));
+      }
+      console.log(chalk.gray(`\n  Config file: ${getConfigPath()}`));
+      console.log();
+    }
+  });
+
 // 压缩图片命令
 program
   .command('compress')
+  .alias('c')
   .description('Compress image files')
   .argument('<source>', 'Source image file or directory')
-  .argument('[output]', 'Output file or directory (default: same location with _compressed suffix)')
-  .option('-q, --quality <number>', 'JPEG/WebP quality (1-100)', '80')
-  .option('-r, --recursive', 'Process directories recursively', false)
-  .option('-f, --format <type>', 'Output format (jpeg, png, webp, avif)', '')
+  .argument('[output]', 'Output file or directory')
+  .option('-q, --quality <number>', 'JPEG/WebP quality (1-100)')
+  .option('-r, --recursive', 'Process directories recursively')
+  .option('-f, --format <type>', 'Output format (jpeg, png, webp, avif)')
   .action(async (source, output, options) => {
     const spinner = ora('Processing...').start();
+    const config = getConfig();
+    
+    // 合并配置
+    const quality = options.quality ?? config.quality;
+    const recursive = options.recursive ?? config.recursive;
+    const format = options.format ?? config.format;
     
     try {
       const stats = fs.statSync(source);
       
       if (stats.isDirectory()) {
         spinner.text = 'Processing directory...';
-        const results = await processDirectory(source, output, options);
+        const results = await processDirectory(source, output, { quality, recursive, format });
         spinner.succeed(chalk.green(`\n✓ Compressed ${results.success} files`));
         if (results.failed > 0) {
           console.log(chalk.red(`✗ Failed: ${results.failed} files`));
         }
       } else {
-        const result = await compressSingleFile(source, output, options);
+        const result = await compressSingleFile(source, output, { quality, format });
         if (result.success) {
           spinner.succeed(chalk.green(`\n✓ Compressed successfully!`));
           console.log(chalk.gray(`  Original: ${result.originalSize} bytes`));
@@ -58,23 +158,27 @@ program
   .description('Convert images to WebP format')
   .argument('<source>', 'Source image file or directory')
   .argument('[output]', 'Output file or directory')
-  .option('-q, --quality <number>', 'WebP quality (1-100)', '80')
-  .option('-r, --recursive', 'Process directories recursively', false)
+  .option('-q, --quality <number>', 'WebP quality (1-100)')
+  .option('-r, --recursive', 'Process directories recursively')
   .action(async (source, output, options) => {
     const spinner = ora('Converting to WebP...').start();
+    const config = getConfig();
+    
+    const quality = options.quality ?? config.quality;
+    const recursive = options.recursive ?? config.recursive;
     
     try {
       const stats = fs.statSync(source);
       
       if (stats.isDirectory()) {
         spinner.text = 'Processing directory...';
-        const results = await processDirectoryToWebp(source, output, options);
+        const results = await processDirectoryToWebp(source, output, { quality, recursive });
         spinner.succeed(chalk.green(`\n✓ Converted ${results.success} files to WebP`));
         if (results.failed > 0) {
           console.log(chalk.red(`✗ Failed: ${results.failed} files`));
         }
       } else {
-        const result = await convertToWebpSingle(source, output, options);
+        const result = await convertToWebpSingle(source, output, { quality });
         if (result.success) {
           spinner.succeed(chalk.green(`\n✓ Converted to WebP successfully!`));
           console.log(chalk.gray(`  Original: ${result.originalSize} bytes`));
@@ -95,15 +199,18 @@ program
   .description('Convert images between formats')
   .argument('<source>', 'Source image file')
   .argument('<output>', 'Output file path')
-  .option('-q, --quality <number>', 'Quality (1-100)', '80')
+  .option('-q, --quality <number>', 'Quality (1-100)')
   .action(async (source, output, options) => {
     const spinner = ora('Converting...').start();
+    const config = getConfig();
+    
+    const quality = options.quality ?? config.quality;
     
     try {
       const ext = path.extname(output).toLowerCase().replace('.', '');
       const result = await convertImage(source, output, { 
         format: ext,
-        quality: parseInt(options.quality)
+        quality: parseInt(quality)
       });
       
       spinner.succeed(chalk.green(`\n✓ Converted successfully!`));
@@ -140,9 +247,87 @@ program
     }
   });
 
-// 批量处理函数
+// 批量处理函数 - 处理所有图片并转换为 WebP
+async function processAllImagesToWebp(sourceDir, config) {
+  const pattern = `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,bmp,webp}`;
+  const files = await glob(pattern, { nodir: true });
+  
+  const results = { 
+    success: 0, 
+    converted: 0,
+    skipped: 0,
+    failed: 0,
+    totalOriginalSize: 0,
+    totalConvertedSize: 0
+  };
+  
+  // 用于跟踪已处理的文件名，避免重复
+  const processedFiles = new Map();
+  
+  for (const file of files) {
+    try {
+      const ext = path.extname(file).toLowerCase();
+      const isAlreadyWebp = ext === '.webp';
+      
+      // 生成输出路径（确保唯一性）
+      let outputPath = generateUniqueOutputPath(file, '.webp', processedFiles);
+      
+      if (isAlreadyWebp) {
+        // 已经是 WebP 格式，只压缩不转换
+        await compressImageToWebp(file, outputPath, config.quality);
+        results.skipped++;
+      } else {
+        // 转换为 WebP
+        await compressImageToWebp(file, outputPath, config.quality);
+        results.converted++;
+      }
+      
+      const originalSize = fs.statSync(file).size;
+      const compressedSize = fs.statSync(outputPath).size;
+      
+      results.totalOriginalSize += originalSize;
+      results.totalConvertedSize += compressedSize;
+      results.success++;
+      
+      // 记录已处理的文件
+      processedFiles.set(file, outputPath);
+    } catch (error) {
+      console.log(chalk.yellow(`\n⚠ Failed: ${file} - ${error.message}`));
+      results.failed++;
+    }
+  }
+  
+  // 计算总节省百分比
+  if (results.totalOriginalSize > 0) {
+    const savedPercent = ((results.totalOriginalSize - results.totalConvertedSize) / results.totalOriginalSize * 100).toFixed(1);
+    results.totalSavedPercent = savedPercent;
+  } else {
+    results.totalSavedPercent = '0.0';
+  }
+  
+  return results;
+}
+
+// 生成唯一的输出路径，处理名称重复问题
+function generateUniqueOutputPath(originalPath, targetExt, processedFiles) {
+  const dir = path.dirname(originalPath);
+  const baseName = path.basename(originalPath, path.extname(originalPath));
+  
+  let outputPath = path.join(dir, `${baseName}${targetExt}`);
+  let counter = 1;
+  
+  // 检查文件名是否已被使用
+  while (processedFiles.has(originalPath) || fs.existsSync(outputPath)) {
+    outputPath = path.join(dir, `${baseName}_${counter}${targetExt}`);
+    counter++;
+  }
+  
+  return outputPath;
+}
+
 async function processDirectory(sourceDir, outputDir, options) {
-  const pattern = options.recursive 
+  const { quality, recursive, format } = options;
+  const pattern = recursive 
     ? `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,bmp}`
     : `${sourceDir}/*.{jpg,jpeg,png,gif,tiff,bmp}`;
   
@@ -161,14 +346,14 @@ async function processDirectory(sourceDir, outputDir, options) {
           fs.mkdirSync(outDir, { recursive: true });
         }
       } else {
-        const ext = options.format ? `.${options.format}` : path.extname(file);
+        const ext = format ? `.${format}` : path.extname(file);
         const baseName = path.basename(file, path.extname(file));
         outputPath = path.join(path.dirname(file), `${baseName}_compressed${ext}`);
       }
       
       await compressImage(file, outputPath, {
-        quality: parseInt(options.quality),
-        format: options.format || undefined
+        quality: parseInt(quality),
+        format: format || undefined
       });
       results.success++;
     } catch (error) {
@@ -181,7 +366,8 @@ async function processDirectory(sourceDir, outputDir, options) {
 }
 
 async function processDirectoryToWebp(sourceDir, outputDir, options) {
-  const pattern = options.recursive 
+  const { quality, recursive } = options;
+  const pattern = recursive 
     ? `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,bmp}`
     : `${sourceDir}/*.{jpg,jpeg,png,gif,tiff,bmp}`;
   
@@ -204,7 +390,7 @@ async function processDirectoryToWebp(sourceDir, outputDir, options) {
         outputPath = path.join(path.dirname(file), `${baseName}.webp`);
       }
       
-      await compressImageToWebp(file, outputPath, parseInt(options.quality));
+      await compressImageToWebp(file, outputPath, parseInt(quality));
       results.success++;
     } catch (error) {
       console.log(chalk.yellow(`\n⚠ Failed: ${file} - ${error.message}`));
@@ -217,16 +403,17 @@ async function processDirectoryToWebp(sourceDir, outputDir, options) {
 
 async function compressSingleFile(source, output, options) {
   const stats = fs.statSync(source);
+  const { quality, format } = options;
   
   if (!output) {
-    const ext = options.format ? `.${options.format}` : path.extname(source);
+    const ext = format ? `.${format}` : path.extname(source);
     const baseName = path.basename(source, path.extname(source));
     output = path.join(path.dirname(source), `${baseName}_compressed${ext}`);
   }
   
   await compressImage(source, output, {
-    quality: parseInt(options.quality),
-    format: options.format || undefined
+    quality: parseInt(quality),
+    format: format || undefined
   });
   
   const originalSize = stats.size;
@@ -243,13 +430,14 @@ async function compressSingleFile(source, output, options) {
 
 async function convertToWebpSingle(source, output, options) {
   const stats = fs.statSync(source);
+  const { quality } = options;
   
   if (!output) {
     const baseName = path.basename(source, path.extname(source));
     output = path.join(path.dirname(source), `${baseName}.webp`);
   }
   
-  await compressImageToWebp(source, output, parseInt(options.quality));
+  await compressImageToWebp(source, output, parseInt(quality));
   
   const originalSize = stats.size;
   const convertedSize = fs.statSync(output).size;

@@ -9,25 +9,94 @@ npm install
 npm link
 ```
 
-## 命令
-
-### compress - 压缩图片
+## 快速开始
 
 ```bash
-imgmin compress <source> [output] [options]
+# 1. 安装
+npm install
+npm link
+
+# 2. 使用 - 零配置运行
+cd /path/to/images
+imgmin                    # 自动处理所有图片！
+
+# 或者使用具体命令
+imgmin compress photo.jpg
+imgmin c photo.jpg        # 使用短别名
+imgmin webp ./images -r
+```
+
+## 命令
+
+### 默认命令 - 快速批量处理
+
+```bash
+imgmin
+
+# 直接运行，自动处理当前目录及其子目录下的所有图片
+# - 非 WebP 格式：转换为 WebP 并压缩
+# - WebP 格式：仅压缩优化
+# - 自动处理文件名冲突
+```
+
+**特性：**
+- 🚀 零配置运行，无需任何参数
+- 📁 递归扫描当前目录及所有子目录
+- 🔄 自动转换为 WebP 格式（节省最多 80% 体积）
+- 🛡️ 智能文件名管理，避免覆盖原文件
+- 📊 显示详细统计信息
+
+### config - 配置管理
+
+```bash
+imgmin config [key] [value] [options]
 
 # 示例
-imgmin compress input.jpg                    # 压缩单张，默认输出为 input_compressed.jpg
-imgmin compress input.png -q 85              # 设置质量为 85
-imgmin compress input.jpg output.webp -f webp # 输出为 webp 格式
-imgmin compress ./images ./output -r         # 批量压缩目录
-imgmin compress ./images -r -q 80            # 递归压缩，质量 80
+imgmin config                 # 查看所有配置
+imgmin config quality         # 查看单个配置项
+imgmin config quality 85      # 设置质量为 85
+imgmin config quality true     # 设置为布尔值
+imgmin config -g               # 显示配置文件路径
+imgmin config -d quality       # 删除配置项（恢复默认值）
+imgmin config -r                # 重置所有配置
 ```
 
 **选项：**
-- `-q, --quality <number>` - 质量 1-100（默认 80）
+- `-g, --global` - 显示配置文件路径
+- `-d, --delete <key>` - 删除指定配置项
+- `-r, --reset` - 重置所有配置
+
+**可配置项：**
+| 键 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `quality` | number | 80 | 压缩质量 1-100 |
+| `format` | string | - | 默认输出格式 |
+| `recursive` | boolean | false | 是否递归处理目录 |
+| `outputDir` | string | - | 默认输出目录 |
+
+配置文件位于 `~/.imgminrc`
+
+### compress / c - 压缩图片
+
+```bash
+imgmin compress <source> [output] [options]
+imgmin c <source> [output] [options]        # 使用别名
+
+# 示例
+imgmin compress input.jpg                    # 压缩单张
+imgmin c input.jpg                           # 使用短别名
+imgmin compress input.png -q 85              # 设置质量
+imgmin compress input.jpg output.webp -f webp # 输出为 webp
+imgmin compress ./images ./output -r         # 批量压缩目录
+```
+
+**选项：**
+- `-q, --quality <number>` - 质量 1-100（默认使用配置）
 - `-r, --recursive` - 递归处理子目录
 - `-f, --format <type>` - 输出格式（jpeg, png, webp, avif）
+
+**别名：**
+- `c` - `compress` 的简短形式
 
 ### webp - 转换为 WebP
 
@@ -36,13 +105,15 @@ imgmin webp <source> [output] [options]
 
 # 示例
 imgmin webp input.png                        # 转换为 input.webp
-imgmin webp input.jpg -q 75                  # 设置质量为 75
-imgmin webp ./images ./output -r             # 批量转换目录
+imgmin webp input.jpg -q 75                  # 设置质量
+imgmin webp ./images ./output -r             # 批量转换
 ```
 
 **选项：**
-- `-q, --quality <number>` - 质量 1-100（默认 80）
+- `-q, --quality <number>` - 质量 1-100
 - `-r, --recursive` - 递归处理子目录
+
+**提示：** 使用默认命令 `imgmin` 可以更快地批量转换为 WebP！
 
 ### convert - 格式转换
 
@@ -55,7 +126,7 @@ imgmin convert photo.jpg photo.tiff
 ```
 
 **选项：**
-- `-q, --quality <number>` - 质量 1-100（默认 80）
+- `-q, --quality <number>` - 质量 1-100
 
 ### info - 查看图片信息
 
