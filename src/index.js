@@ -474,7 +474,21 @@ async function processDirectory(sourceDir, outputDir, options, spinner) {
         format: format || undefined
       });
       
-      // 强制替换模式：如果压缩后更大则跳过替换，否则替换原文件
+      // 检查压缩后文件大小，如果更大则跳过（仅适用于生成 _compressed 文件的场景）
+      if (!forceReplace && !outputDir) {
+        const originalSize = fs.statSync(file).size;
+        const compressedSize = fs.statSync(outputPath).size;
+        
+        if (compressedSize >= originalSize) {
+          // 压缩后更大，删除生成的文件
+          fs.unlinkSync(outputPath);
+          console.log(chalk.gray(`  Skip (larger): ${file} (${originalSize} → ${compressedSize})`));
+          results.skippedLarger++;
+          continue;
+        }
+      }
+      
+      // 强制替换模式：用压缩后的文件替换原文件
       if (forceReplace && !outputDir) {
         const originalSize = fs.statSync(file).size;
         const compressedSize = fs.statSync(outputPath).size;
@@ -613,10 +627,23 @@ async function compressSingleFile(source, output, options) {
     format: format || undefined
   });
   
+  const compressedSize = fs.statSync(finalOutput).size;
+  
+  // 检查压缩后文件大小，如果更大则跳过（仅适用于生成 _compressed 文件的场景）
+  if (!forceReplace && !output) {
+    if (compressedSize >= stats.size) {
+      // 压缩后更大，删除生成的文件
+      fs.unlinkSync(finalOutput);
+      return { 
+        success: true, 
+        skipped: true, 
+        message: `Compressed file is larger (${stats.size} → ${compressedSize}), kept original` 
+      };
+    }
+  }
+  
   // 强制替换模式：用压缩后的文件替换原文件
   if (forceReplace && !output) {
-    const compressedSize = fs.statSync(finalOutput).size;
-    
     if (compressedSize >= stats.size) {
       // 压缩后更大，删除临时文件，保留原文件
       fs.unlinkSync(finalOutput);
@@ -634,7 +661,6 @@ async function compressSingleFile(source, output, options) {
     finalOutput = originalPath;
   }
   
-  const compressedSize = fs.statSync(finalOutput).size;
   const savedPercent = ((stats.size - compressedSize) / stats.size * 100).toFixed(1);
   
   const result = {
