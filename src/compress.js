@@ -134,13 +134,64 @@ export async function resizeImage(inputPath, outputPath, options = {}) {
 }
 
 /**
+ * 压缩并转换为 AVIF 格式
+ * @param {string} inputPath - 输入文件路径
+ * @param {string} outputPath - 输出文件路径
+ * @param {number} quality - 质量 (1-100)
+ */
+export async function compressImageToAvif(inputPath, outputPath, quality = 80) {
+  // 确保输出目录存在
+  const outputDir = path.dirname(outputPath);
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+  
+  // 将 .avif 扩展名添加到输出路径（如果不是）
+  if (!outputPath.toLowerCase().endsWith('.avif')) {
+    outputPath = outputPath + '.avif';
+  }
+  
+  await sharp(inputPath)
+    .avif({ quality: Math.min(100, Math.max(1, quality)) })
+    .toFile(outputPath);
+  
+  return {
+    input: inputPath,
+    output: outputPath,
+    originalSize: fs.statSync(inputPath).size,
+    compressedSize: fs.statSync(outputPath).size
+  };
+}
+
+/**
+ * 压缩并转换为指定格式（通用函数）
+ * @param {string} inputPath - 输入文件路径
+ * @param {string} outputPath - 输出文件路径
+ * @param {string} format - 目标格式 (webp, avif)
+ * @param {number} quality - 质量 (1-100)
+ */
+export async function compressImageToFormat(inputPath, outputPath, format, quality = 80) {
+  const formatMap = {
+    webp: compressImageToWebp,
+    avif: compressImageToAvif
+  };
+  
+  const handler = formatMap[format];
+  if (!handler) {
+    throw new Error(`Unsupported format for conversion: ${format}. Supported: webp, avif`);
+  }
+  
+  return handler(inputPath, outputPath, quality);
+}
+
+/**
  * 批量压缩目录下所有图片
  * @param {string} inputDir - 输入目录
  * @param {string} outputDir - 输出目录
  * @param {Object} options - 压缩选项
  */
 export async function compressDirectory(inputDir, outputDir, options = {}) {
-  const pattern = `${inputDir}/**/*.{jpg,jpeg,png,gif,tiff,bmp,webp}`;
+  const pattern = `${inputDir}/**/*.{jpg,jpeg,png,gif,tiff,tif,bmp,svg,avif,webp}`;
   const files = await glob(pattern, { nodir: true });
   
   const results = [];

@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>imgmin — Image Optimization Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    :root {
+      --bg-deep: #0a0a0c;
+      --bg: #121215;
+      --bg-card: #1a1a1f;
+      --bg-card-hover: #222228;
+      --bg-elevated: #2a2a32;
+      --border: #2e2e38;
+      --border-light: #3a3a44;
+      --text: #e8e8ec;
+      --text-secondary: #8888a0;
+      --text-muted: #5a5a70;
+      --accent: #e8a832;
+      --accent-glow: rgba(232, 168, 50, 0.15);
+      --accent-dim: #b07820;
+      --success: #32d878;
+      --success-glow: rgba(50, 216, 120, 0.12);
+      --error: #e84848;
+      --error-glow: rgba(232, 72, 72, 0.12);
+      --warning: #e8a832;
+      --radius-sm: 6px;
+      --radius: 10px;
+      --radius-lg: 14px;
+      --radius-xl: 20px;
+      --shadow-sm: 0 2px 8px rgba(0,0,0,0.3);
+      --shadow: 0 4px 16px rgba(0,0,0,0.4);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
+      --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      --font-display: 'Outfit', sans-serif;
+      --font-body: 'DM Sans', sans-serif;
+    }
+
+    html { font-size: 16px; }
+    body {
+      background: var(--bg-deep);
+      color: var(--text);
+      font-family: var(--font-body);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Background atmosphere */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -30%; left: -10%;
+      width: 60%; height: 60%;
+      background: radial-gradient(ellipse, var(--accent-glow), transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::after {
+      content: '';
+      position: fixed;
+      bottom: -20%; right: -10%;
+      width: 50%; height: 50%;
+      background: radial-gradient(ellipse, rgba(50,216,120,0.06), transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Noise texture overlay */
+    .noise-overlay {
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .app-container {
+      position: relative;
+      z-index: 1;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 32px 24px 64px;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 0 40px;
+    }
+    .logo {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 28px;
+      letter-spacing: -0.5px;
+      color: var(--accent);
+    }
+    .logo span { color: var(--text); font-weight: 400; }
+    .subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    /* Drop zone */
+    .drop-zone {
+      position: relative;
+      border: 2px dashed var(--border-light);
+      border-radius: var(--radius-xl);
+      padding: 56px 32px;
+      text-align: center;
+      transition: all var(--transition);
+      cursor: pointer;
+      background: var(--bg);
+      overflow: hidden;
+    }
+    .drop-zone::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, var(--accent-glow), transparent 50%);
+      opacity: 0;
+      transition: opacity var(--transition);
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: var(--bg-card);
+      transform: scale(1.01);
+    }
+    .drop-zone:hover::before, .drop-zone.drag-over::before {
+      opacity: 1;
+    }
+    .drop-zone.drag-over {
+      border-style: solid;
+      box-shadow: 0 0 30px var(--accent-glow);
+    }
+    .drop-icon {
+      width: 64px; height: 64px;
+      margin: 0 auto 16px;
+      opacity: 0.5;
+      transition: opacity var(--transition);
+    }
+    .drop-zone:hover .drop-icon { opacity: 1; }
+    .drop-title {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .drop-subtitle {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+    .drop-zone input { display: none; }
+    .drop-subtitle em {
+      color: var(--accent);
+      font-style: normal;
+      font-weight: 500;
+    }
+
+    /* Settings panel */
+    .settings-panel {
+      display: flex;
+      gap: 16px;
+      margin-top: 24px;
+      flex-wrap: wrap;
+    }
+    .setting-group {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      flex: 1;
+      min-width: 200px;
+    }
+    .setting-label {
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    /* Format selector */
+    .format-options {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .format-btn {
+      background: var(--bg-elevated);
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 8px;
+      text-align: center;
+      cursor: pointer;
+      transition: all var(--transition);
+      font-family: var(--font-display);
+      position: relative;
+    }
+    .format-btn:hover {
+      border-color: var(--accent-dim);
+      background: var(--bg-card-hover);
+    }
+    .format-btn.active {
+      border-color: var(--accent);
+      background: var(--accent-glow);
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+    .format-check {
+      position: absolute;
+      top: 6px; right: 6px;
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: #0a0a0c;
+      font-weight: 700;
+      opacity: 0;
+      transform: scale(0.5);
+      transition: all var(--transition);
+    }
+    .format-btn.active .format-check {
+      opacity: 1;
+      transform: scale(1);
+    }
+    .format-name {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text);
+    }
+    .format-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    .format-btn.active .format-name { color: var(--accent); }
+    
+    .format-count {
+      font-size: 11px;
+      color: var(--accent);
+      margin-top: 6px;
+      font-weight: 500;
+      opacity: 0;
+      transition: opacity var(--transition);
+      height: 0;
+      overflow: hidden;
+    }
+    .format-count.visible {
+      opacity: 1;
+      height: auto;
+    }
+
+    /* Quality slider */
+    .quality-display {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .quality-value {
+      font-family: var(--font-display);
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .quality-hint {
+      font-size: 12px;
+      color: var(--text-secondary);
+      max-width: 140px;
+      text-align: right;
+    }
+    .slider-track {
+      position: relative;
+      height: 8px;
+      background: var(--bg-elevated);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .slider-fill {
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+      border-radius: 4px;
+      transition: width 0.15s ease;
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 8px;
+      background: transparent;
+      position: absolute;
+      top: 0;
+      margin: 0;
+      cursor: pointer;
+      z-index: 2;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 3px solid var(--bg-card);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      cursor: grab;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 3px solid var(--bg-card);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      cursor: grab;
+    }
+    .slider-container {
+      position: relative;
+      margin-top: 4px;
+    }
+
+    /* Process button */
+    .process-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 14px 24px;
+      margin-top: 24px;
+      background: linear-gradient(135deg, var(--accent-dim), var(--accent));
+      border: none;
+      border-radius: var(--radius-lg);
+      color: #0a0a0c;
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: all var(--transition);
+      box-shadow: 0 4px 16px var(--accent-glow);
+    }
+    .process-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(232,168,50,0.3);
+    }
+    .process-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .process-btn.processing {
+      animation: pulse-btn 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse-btn {
+      0%, 100% { box-shadow: 0 4px 16px var(--accent-glow); }
+      50% { box-shadow: 0 4px 32px rgba(232,168,50,0.4); }
+    }
+
+    /* Progress */
+    .progress-bar {
+      height: 4px;
+      background: var(--bg-elevated);
+      border-radius: 2px;
+      margin-top: 16px;
+      overflow: hidden;
+      opacity: 0;
+      transition: opacity var(--transition);
+    }
+    .progress-bar.visible { opacity: 1; }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--success));
+      border-radius: 2px;
+      width: 0;
+      transition: width 0.3s ease;
+    }
+
+    /* Results area */
+    .results-area {
+      margin-top: 32px;
+    }
+    .results-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .results-title {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    /* Stats summary */
+    .stats-summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      text-align: center;
+    }
+    .stat-card.accent {
+      border-color: var(--accent-dim);
+      background: linear-gradient(135deg, var(--bg-card), var(--accent-glow));
+    }
+    .stat-card.success {
+      border-color: rgba(50,216,120,0.3);
+      background: linear-gradient(135deg, var(--bg-card), var(--success-glow));
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+    .stat-value {
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .stat-card.accent .stat-value { color: var(--accent); }
+    .stat-card.success .stat-value { color: var(--success); }
+
+    /* Result cards */
+    .result-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .result-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      transition: all var(--transition);
+      animation: fade-in 0.4s ease-out both;
+    }
+    @keyframes fade-in {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .result-card:hover {
+      border-color: var(--border-light);
+      background: var(--bg-card-hover);
+    }
+    .result-preview {
+      width: 80px;
+      height: 80px;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      background: var(--bg-elevated);
+      flex-shrink: 0;
+      position: relative;
+    }
+    .result-preview img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+    }
+    .result-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .result-name {
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .result-meta {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+    .result-savings {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--success);
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .result-savings small {
+      font-size: 11px;
+      color: var(--text-muted);
+      display: block;
+      font-weight: 400;
+    }
+    .result-actions {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .btn-sm {
+      padding: 8px 14px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-family: var(--font-body);
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+    .btn-sm:hover {
+      background: var(--bg-card-hover);
+      color: var(--text);
+      border-color: var(--border-light);
+    }
+    .btn-sm.primary {
+      background: var(--accent-glow);
+      border-color: var(--accent-dim);
+      color: var(--accent);
+    }
+    .btn-sm.primary:hover {
+      background: rgba(232,168,50,0.25);
+      color: var(--accent);
+    }
+    .result-card.error {
+      border-color: rgba(232,72,72,0.3);
+      background: linear-gradient(135deg, var(--bg-card), var(--error-glow));
+    }
+    .result-error-msg {
+      color: var(--error);
+      font-size: 13px;
+    }
+
+    /* Download all button */
+    .download-all-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--success);
+      border-radius: var(--radius);
+      color: var(--success);
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+    .download-all-btn:hover {
+      background: var(--success-glow);
+      transform: translateY(-1px);
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-muted);
+    }
+    .empty-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+      opacity: 0.3;
+    }
+
+    /* Toast notification */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 12px 24px;
+      font-size: 14px;
+      box-shadow: var(--shadow-lg);
+      z-index: 1000;
+      transition: transform 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .toast.visible { transform: translateX(-50%) translateY(0); }
+    .toast.success { border-color: var(--success); color: var(--success); }
+    .toast.error { border-color: var(--error); color: var(--error); }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .app-container { padding: 16px 16px 48px; }
+      .settings-panel { flex-direction: column; }
+      .format-options { grid-template-columns: repeat(2, 1fr); }
+      .stats-summary { grid-template-columns: 1fr; }
+      .result-card { flex-wrap: wrap; }
+      .result-preview { width: 60px; height: 60px; }
+      .result-savings { font-size: 14px; }
+    }
+
+    /* Spinner */
+    .spinner {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border: 2px solid transparent;
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Image comparison overlay */
+    .comparison-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+    .comparison-overlay.visible { display: flex; }
+    .comparison-container {
+      max-width: 90vw;
+      max-height: 80vh;
+      position: relative;
+    }
+    .comparison-container img {
+      max-width: 90vw;
+      max-height: 80vh;
+      object-fit: contain;
+      display: block;
+    }
+    .comparison-close {
+      position: absolute;
+      top: -40px; right: 0;
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 28px;
+      cursor: pointer;
+      padding: 8px;
+    }
+    .comparison-close:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+  <div class="noise-overlay"></div>
+  <div class="app-container">
+    <header>
+      <div class="logo">imgmin<span>.studio</span></div>
+      <div class="subtitle">Image Optimization</div>
+    </header>
+
+    <!-- Drop zone -->
+    <div class="drop-zone" id="dropZone">
+      <svg class="drop-icon" viewBox="0 0 64 64" fill="none">
+        <rect x="8" y="12" width="48" height="40" rx="4" stroke="currentColor" stroke-width="2"/>
+        <circle cx="24" cy="30" r="6" stroke="currentColor" stroke-width="2"/>
+        <path d="M8 42L22 32L34 40L48 28L56 36" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M32 4V20M24 12L32 4L40 12" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="drop-title">Drop images here</div>
+      <div class="drop-subtitle">or <em>click to browse</em> — JPG, PNG, GIF, WebP, AVIF, TIFF</div>
+      <input type="file" id="fileInput" accept="image/*" multiple>
+    </div>
+
+    <!-- Settings -->
+    <div class="settings-panel">
+      <div class="setting-group">
+        <div class="setting-label">Format</div>
+        <div class="format-options">
+          <div class="format-btn" data-format="webp">
+            <div class="format-check">✓</div>
+            <div class="format-name">WebP</div>
+            <div class="format-desc">Best ratio</div>
+          </div>
+          <div class="format-btn" data-format="avif">
+            <div class="format-check">✓</div>
+            <div class="format-name">AVIF</div>
+            <div class="format-desc">Smallest</div>
+          </div>
+          <div class="format-btn" data-format="jpeg">
+            <div class="format-check">✓</div>
+            <div class="format-name">JPEG</div>
+            <div class="format-desc">Universal</div>
+          </div>
+          <div class="format-btn" data-format="png">
+            <div class="format-check">✓</div>
+            <div class="format-name">PNG</div>
+            <div class="format-desc">Lossless</div>
+          </div>
+          <div class="format-btn active" data-format="original">
+            <div class="format-check">✓</div>
+            <div class="format-name">Original</div>
+            <div class="format-desc">Keep format</div>
+          </div>
+        </div>
+        <div class="format-count" id="formatCount">1 format selected</div>
+      </div>
+      <div class="setting-group">
+        <div class="setting-label">Quality</div>
+        <div class="quality-display">
+          <div class="quality-value" id="qualityValue">80</div>
+          <div class="quality-hint" id="qualityHint">Balanced quality for WebP</div>
+        </div>
+        <div class="slider-container">
+          <div class="slider-track">
+            <div class="slider-fill" id="sliderFill" style="width:80%"></div>
+          </div>
+          <input type="range" id="qualitySlider" min="1" max="100" value="80">
+        </div>
+      </div>
+    </div>
+
+    <!-- Process button -->
+    <button class="process-btn" id="processBtn" disabled>
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M10 2L2 10l8 8 8-8-8-8zM10 5l5 5-5 5-5-5 5-5z"/>
+      </svg>
+      Compress Images
+    </button>
+    <div class="progress-bar" id="progressBar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+
+    <!-- Results -->
+    <div class="results-area" id="resultsArea" style="display:none">
+      <div class="results-header">
+        <div class="results-title">Results</div>
+        <button class="download-all-btn" id="downloadAllBtn" style="display:none">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 12L3 7h3V1h4v6h3L8 12zM2 14h12v1H2z"/>
+          </svg>
+          Download All
+        </button>
+      </div>
+      <div class="stats-summary" id="statsSummary"></div>
+      <div class="result-cards" id="resultCards"></div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // State
+    const state = {
+      files: [],
+      formats: ['original'],
+      quality: 80,
+      processing: false,
+      results: []
+    };
+
+    // DOM refs
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const processBtn = document.getElementById('processBtn');
+    const progressBar = document.getElementById('progressBar');
+    const progressFill = document.getElementById('progressFill');
+    const resultsArea = document.getElementById('resultsArea');
+    const resultCards = document.getElementById('resultCards');
+    const statsSummary = document.getElementById('statsSummary');
+    const downloadAllBtn = document.getElementById('downloadAllBtn');
+    const qualitySlider = document.getElementById('qualitySlider');
+    const qualityValue = document.getElementById('qualityValue');
+    const qualityHint = document.getElementById('qualityHint');
+    const sliderFill = document.getElementById('sliderFill');
+    const formatCount = document.getElementById('formatCount');
+    const toast = document.getElementById('toast');
+
+    // Quality hints per format
+    const qualityHints = {
+      webp: { low: 'Maximum compression', mid: 'Balanced quality for WebP', high: 'Near-lossless WebP' },
+      avif: { low: 'Ultra-small files', mid: 'Recommended AVIF range (50-65)', high: 'AVIF >70 is overkill' },
+      jpeg: { low: 'Heavy compression', mid: 'Good JPEG quality', high: 'High-quality JPEG' },
+      png: { low: 'Minimal palette', mid: 'Standard PNG', high: 'Lossless PNG' },
+      original: { low: 'Heavy compression', mid: 'Balanced quality', high: 'Near-lossless' }
+    };
+
+    // Init format count
+    updateFormatCount();
+
+    // Format selection (multi-select)
+    document.querySelectorAll('.format-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const fmt = btn.dataset.format;
+        const idx = state.formats.indexOf(fmt);
+        
+        if (idx > -1) {
+          // Deselect — but prevent deselecting the last one
+          if (state.formats.length > 1) {
+            state.formats.splice(idx, 1);
+            btn.classList.remove('active');
+          }
+        } else {
+          // Select
+          state.formats.push(fmt);
+          btn.classList.add('active');
+        }
+        
+        updateFormatCount();
+        updateQualityHint();
+      });
+    });
+
+    function updateFormatCount() {
+      const count = state.formats.length;
+      if (count === 1) {
+        formatCount.textContent = `1 format · ${state.formats[0].toUpperCase()}`;
+      } else {
+        formatCount.textContent = `${count} formats selected`;
+      }
+      formatCount.classList.add('visible');
+    }
+
+    function updateQualityHint() {
+      const q = state.quality;
+      const primaryFormat = state.formats[0] || 'webp';
+      const hints = qualityHints[primaryFormat] || qualityHints.original;
+      const level = q <= 40 ? 'low' : (q <= 70 ? 'mid' : 'high');
+      qualityHint.textContent = hints[level];
+      
+      // AVIF warning
+      if (state.formats.includes('avif') && q > 70) {
+        qualityHint.style.color = 'var(--warning)';
+      } else {
+        qualityHint.style.color = '';
+      }
+    }
+
+    // Quality slider
+    qualitySlider.addEventListener('input', () => {
+      state.quality = parseInt(qualitySlider.value);
+      qualityValue.textContent = state.quality;
+      sliderFill.style.width = `${state.quality}%`;
+      updateQualityHint();
+    });
+
+    // Drop zone events
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('drag-over');
+    });
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      handleFiles(e.dataTransfer.files);
+    });
+    dropZone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+
+    function handleFiles(fileList) {
+      state.files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
+      if (state.files.length === 0) {
+        showToast('No valid image files selected', 'error');
+        return;
+      }
+      processBtn.disabled = false;
+      dropZone.querySelector('.drop-title').textContent = `${state.files.length} images selected`;
+      dropZone.querySelector('.drop-subtitle').innerHTML = 'Click <em>Compress</em> to process, or drop more images';
+    }
+
+    // Process
+    processBtn.addEventListener('click', startProcessing);
+
+    async function startProcessing() {
+      if (state.processing || state.files.length === 0) return;
+      state.processing = true;
+      processBtn.disabled = true;
+      processBtn.classList.add('processing');
+      processBtn.innerHTML = '<span class="spinner"></span> Processing...';
+      progressBar.classList.add('visible');
+      progressFill.style.width = '0%';
+
+      const formData = new FormData();
+      state.files.forEach(f => formData.append('images', f));
+      state.formats.forEach(fmt => formData.append('formats', fmt));
+      formData.append('quality', state.quality);
+
+      try {
+        progressFill.style.width = '30%';
+        const res = await fetch('/api/compress', { method: 'POST', body: formData });
+        progressFill.style.width = '90%';
+        
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'Server error');
+        }
+
+        const data = await res.json();
+        progressFill.style.width = '100%';
+        state.results = data.results;
+        showResults(data.results);
+        showToast(`Processed ${data.results.filter(r => r.success).length} images`, 'success');
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        state.processing = false;
+        processBtn.classList.remove('processing');
+        processBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2L2 10l8 8 8-8-8-8zM10 5l5 5-5 5-5-5 5-5z"/></svg> Compress Images`;
+        processBtn.disabled = state.files.length === 0;
+        setTimeout(() => {
+          progressBar.classList.remove('visible');
+          progressFill.style.width = '0%';
+        }, 1000);
+      }
+    }
+
+    function showResults(results) {
+      resultsArea.style.display = '';
+      
+      const successes = results.filter(r => r.success);
+      const errors = results.filter(r => !r.success);
+      
+      // Stats
+      if (successes.length > 0) {
+        const totalOriginalSet = new Set(successes.map(r => r.originalName));
+        const totalOriginal = successes.reduce((s, r) => {
+          // Each unique source file contributes its original size once per format
+          return s + r.originalSize;
+        }, 0);
+        const totalCompressed = successes.reduce((s, r) => s + r.compressedSize, 0);
+        
+        statsSummary.innerHTML = `
+          <div class="stat-card accent">
+            <div class="stat-label">Images × Formats</div>
+            <div class="stat-value">${totalOriginalSet.size} × ${state.formats.length}</div>
+          </div>
+          <div class="stat-card success">
+            <div class="stat-label">Outputs</div>
+            <div class="stat-value">${successes.length}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Saved (all formats)</div>
+            <div class="stat-value">${formatSize(totalOriginal - totalCompressed)}</div>
+          </div>
+        `;
+
+        downloadAllBtn.style.display = '';
+      }
+
+      // Group results by original image name
+      const grouped = new Map();
+      successes.forEach(r => {
+        if (!grouped.has(r.originalName)) grouped.set(r.originalName, []);
+        grouped.get(r.originalName).push(r);
+      });
+
+      resultCards.innerHTML = '';
+      let idx = 0;
+      
+      // Render successful results grouped by source
+      grouped.forEach((formats, originalName) => {
+        const card = document.createElement('div');
+        card.className = 'result-card';
+        card.style.animationDelay = `${idx * 0.08}s`;
+        idx++;
+
+        const mainResult = formats[0];
+        const previewUrl = `/api/output-file/${mainResult.outputPath.split('/').pop()}`;
+
+        const formatBadges = formats.map(r => `
+          <span style="
+            display:inline-flex;align-items:center;gap:4px;
+            background:var(--bg-elevated);border:1px solid var(--border-light);
+            border-radius:4px;padding:3px 8px;font-size:11px;font-weight:600;
+            color:var(--accent);margin-right:4px;margin-top:4px;
+          ">
+            ${r.format.toUpperCase()}
+            <span style="color:var(--success);font-weight:400;">-${r.savedPercent}%</span>
+            <span style="color:var(--text-muted);font-weight:400;">(${formatSize(r.compressedSize)})</span>
+          </span>
+        `).join('');
+
+        const downloadBtns = formats.map(r => `
+          <button class="btn-sm primary" onclick="downloadFile('${r.downloadUrl}', '${r.originalName}', '${r.format}')">
+            ${r.format.toUpperCase()}
+          </button>
+        `).join('');
+
+        card.innerHTML = `
+          <div class="result-preview">
+            <img src="${previewUrl}" alt="${originalName}" loading="lazy">
+          </div>
+          <div class="result-info" style="flex:1;min-width:0;">
+            <div class="result-name">${originalName}</div>
+            <div class="result-meta" style="margin-top:6px;">Original: ${formatSize(mainResult.originalSize)} · ${mainResult.width}×${mainResult.height}</div>
+            <div style="display:flex;flex-wrap:wrap;margin-top:6px;">${formatBadges}</div>
+          </div>
+          <div class="result-actions" style="flex-shrink:0;display:flex;flex-direction:column;gap:6px;">
+            ${downloadBtns}
+          </div>
+        `;
+        resultCards.appendChild(card);
+      });
+
+      // Render errors
+      errors.forEach((r, i) => {
+        const card = document.createElement('div');
+        card.className = 'result-card error';
+        card.style.animationDelay = `${(idx + i) * 0.06}s`;
+        card.innerHTML = `
+          <div class="result-preview" style="background:var(--error-glow);display:flex;align-items:center;justify-content:center;">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="var(--error)">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+            </svg>
+          </div>
+          <div class="result-info">
+            <div class="result-name">${r.originalName}${r.format ? ' · ' + r.format.toUpperCase() : ''}</div>
+            <div class="result-error-msg">${r.error}</div>
+          </div>
+        `;
+        resultCards.appendChild(card);
+      });
+    }
+
+    function downloadFile(url, filename, formatOverride) {
+      const baseName = filename.replace(/\.[^.]+$/, '');
+      const ext = formatOverride || state.formats[0];
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${baseName}.${ext}`;
+      a.click();
+    }
+
+    // Download all as zip
+    downloadAllBtn.addEventListener('click', async () => {
+      const successes = state.results.filter(r => r.success);
+      if (successes.length === 0) return;
+
+      const filenames = successes.map(r => r.outputPath.split('/').pop());
+
+      try {
+        const res = await fetch('/api/download-zip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ files: filenames })
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'Download failed');
+        }
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `imgmin_${new Date().toISOString().slice(0, 10)}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast(`Downloading ${successes.length} files as zip`, 'success');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+
+    // Format size
+    function formatSize(bytes) {
+      if (bytes === 0) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB'];
+      const k = 1024;
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return `${(bytes / Math.pow(k, i)).toFixed(2)} ${units[i]}`;
+    }
+
+    // Toast
+    function showToast(msg, type = '') {
+      toast.textContent = msg;
+      toast.className = `toast ${type} visible`;
+      setTimeout(() => toast.classList.remove('visible'), 3000);
+    }
+
+    // Reset drop zone on new drop
+    dropZone.addEventListener('drop', () => {
+      fileInput.value = '';
+    });
+  </script>
+</body>
+</html>

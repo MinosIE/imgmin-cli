@@ -1,10 +1,11 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
-import { compressImage, compressImageToWebp } from './compress.js';
+import { compressImage, compressImageToWebp, compressImageToAvif, compressImageToFormat } from './compress.js';
 import { convertImage } from './convert.js';
-import { getImageInfo, glob } from './utils.js';
+import { getImageInfo, glob, formatFileSize, batchProcess } from './utils.js';
 import { getConfig, setConfigValue, resetConfigValue, resetConfig, getConfigPath, hasConfigFile } from './config.js';
+import { startUIServer } from './ui.js';
 import path from 'path';
 import fs from 'fs';
 
@@ -17,20 +18,29 @@ program
 
 // 默认命令 - 当没有提供子命令时执行
 program
-  .action(async () => {
+  .option('-q, --quality <number>', 'Compression quality (1-100)')
+  .option('-f, --format <type>', 'Target format for conversion (webp or avif, default: webp)')
+  .action(async (options) => {
     const spinner = ora('Scanning and processing images...').start();
     const config = getConfig();
+    const quality = options.quality ?? config.quality;
+    const targetFormat = options.format ?? 'webp';
     
     try {
       const currentDir = process.cwd();
-      const results = await processAllImagesToWebp(currentDir, config);
+      const results = await processAllImages(currentDir, { quality, targetFormat });
       
       spinner.succeed(chalk.green(`\n✓ Processing complete!`));
       console.log(chalk.cyan('\n📊 Summary:\n'));
       console.log(chalk.white(`  Processed: ${results.success} files`));
-      console.log(chalk.white(`  Converted to WebP: ${results.converted} files`));
+      if (results.converted > 0) {
+        console.log(chalk.white(`  Converted to ${targetFormat.toUpperCase()}: ${results.converted} files`));
+      }
       if (results.webpOptimized > 0) {
         console.log(chalk.white(`  WebP optimized: ${results.webpOptimized} files`));
+      }
+      if (results.avifOptimized > 0) {
+        console.log(chalk.white(`  AVIF optimized: ${results.avifOptimized} files`));
       }
       if (results.skipped > 0) {
         console.log(chalk.gray(`  Skipped: ${results.skipped} files`));
@@ -38,7 +48,11 @@ program
       if (results.failed > 0) {
         console.log(chalk.red(`  Failed: ${results.failed} files`));
       }
-      console.log(chalk.green(`  Total saved: ${results.totalSavedPercent}`));
+      if (results.totalOriginalSize > 0) {
+        const savedPercent = results.totalSavedPercent;
+        console.log(chalk.green(`  Total saved: ${savedPercent}% (${formatFileSize(results.totalOriginalSize - results.totalConvertedSize)})`));
+        console.log(chalk.gray(`  Original total: ${formatFileSize(results.totalOriginalSize)} → Compressed total: ${formatFileSize(results.totalConvertedSize)}`));
+      }
       console.log();
     } catch (error) {
       spinner.fail(chalk.red(`\n✗ Error: ${error.message}`));
@@ -171,8 +185,8 @@ program
           console.log(chalk.yellow(`\n⚠ Skipped: ${result.message}`));
         } else if (result.success) {
           spinner.succeed(chalk.green(`\n✓ Compressed successfully!`));
-          console.log(chalk.gray(`  Original: ${result.originalSize} bytes`));
-          console.log(chalk.gray(`  Compressed: ${result.compressedSize} bytes`));
+          console.log(chalk.gray(`  Original: ${formatFileSize(result.originalSize)}`));
+          console.log(chalk.gray(`  Compressed: ${formatFileSize(result.compressedSize)}`));
           console.log(chalk.green(`  Saved: ${result.savedPercent}`));
           if (result.webpPath) {
             console.log(chalk.cyan(`  WebP: ${result.webpPath}`));
@@ -186,28 +200,33 @@ program
     }
   });
 
-// 转换为 WebP 命令
-program
-  .command('webp')
-  .description('Convert images to WebP format (default: current directory)')
-  .argument('[source]', 'Source image file or directory (default: current directory)')
-  .argument('[output]', 'Output file or directory')
-  .option('-q, --quality <number>', 'WebP quality (1-100)')
-  .option('-r, --recursive', 'Process directories recursively')
-  .action(async (source, output, options) => {
-    const spinner = ora('Converting to WebP...').start();
+// 通用格式转换命令工厂
+function createFormatCommand(format) {
+  const formatUpper = format.toUpperCase();
+  const defaultQuality = format === 'avif' ? 65 : 80; // AVIF 推荐较低质量
+  
+  return async (source, output, options) => {
+    const spinner = ora(`Converting to ${formatUpper}...`).start();
     const config = getConfig();
+    const force = options.force || false;
     
     const sourcePath = source || process.cwd();
-    const quality = options.quality ?? config.quality;
+    const quality = options.quality ?? (config.quality || defaultQuality);
     const recursive = options.recursive !== undefined ? options.recursive : true;
+    
+    // AVIF 质量提示
+    if (format === 'avif' && quality > 70) {
+      spinner.stop();
+      console.log(chalk.yellow(`\n💡 Tip: AVIF quality ${quality} is high. Recommended range is 50-65 for similar visual quality to WebP 80.`));
+      spinner.start();
+    }
     
     try {
       const stats = fs.statSync(sourcePath);
       
       if (stats.isDirectory()) {
         spinner.text = 'Processing directory...';
-        const results = await processDirectoryToWebp(sourcePath, output, { quality, recursive }, spinner);
+        const results = await processDirectoryToFormat(sourcePath, output, format, { quality, recursive, force }, spinner);
         
         if (results.success === 0 && results.failed === 0 && results.skipped === 0) {
           spinner.stop();
@@ -215,7 +234,12 @@ program
           return;
         }
         
-        spinner.succeed(chalk.green(`\n✓ Converted ${results.success} files to WebP`));
+        spinner.succeed(chalk.green(`\n✓ Converted ${results.success} files to ${formatUpper}`));
+        if (results.totalOriginalSize > 0) {
+          const savedPercent = ((results.totalOriginalSize - results.totalConvertedSize) / results.totalOriginalSize * 100).toFixed(1);
+          console.log(chalk.green(`  Total saved: ${savedPercent}% (${formatFileSize(results.totalOriginalSize - results.totalConvertedSize)})`));
+          console.log(chalk.gray(`  Original total: ${formatFileSize(results.totalOriginalSize)} → ${formatUpper} total: ${formatFileSize(results.totalConvertedSize)}`));
+        }
         if (results.skipped > 0) {
           console.log(chalk.gray(`  Skipped: ${results.skipped} files`));
         }
@@ -223,14 +247,14 @@ program
           console.log(chalk.red(`✗ Failed: ${results.failed} files`));
         }
       } else {
-        const result = await convertToWebpSingle(sourcePath, output, { quality });
+        const result = await convertToFormatSingle(sourcePath, output, format, { quality, force });
         if (result.skipped) {
           spinner.stop();
           console.log(chalk.yellow(`\n⚠ Skipped: ${result.message}`));
         } else if (result.success) {
-          spinner.succeed(chalk.green(`\n✓ Converted to WebP successfully!`));
-          console.log(chalk.gray(`  Original: ${result.originalSize} bytes`));
-          console.log(chalk.gray(`  WebP: ${result.convertedSize} bytes`));
+          spinner.succeed(chalk.green(`\n✓ Converted to ${formatUpper} successfully!`));
+          console.log(chalk.gray(`  Original: ${formatFileSize(result.originalSize)}`));
+          console.log(chalk.gray(`${formatUpper}: ${formatFileSize(result.convertedSize)}`));
           console.log(chalk.green(`  Saved: ${result.savedPercent}`));
         } else {
           spinner.fail(chalk.red(`\n✗ ${result.error}`));
@@ -239,7 +263,30 @@ program
     } catch (error) {
       spinner.fail(chalk.red(`\n✗ Error: ${error.message}`));
     }
-  });
+  };
+}
+
+// 转换为 WebP 命令
+program
+  .command('webp')
+  .description('Convert images to WebP format (default: current directory)')
+  .argument('[source]', 'Source image file or directory (default: current directory)')
+  .argument('[output]', 'Output file or directory')
+  .option('-q, --quality <number>', 'WebP quality (1-100, default: 80)')
+  .option('-r, --recursive', 'Process directories recursively')
+  .option('--force', 'Overwrite existing target files')
+  .action(createFormatCommand('webp'));
+
+// 转换为 AVIF 命令
+program
+  .command('avif')
+  .description('Convert images to AVIF format (default: current directory)')
+  .argument('[source]', 'Source image file or directory (default: current directory)')
+  .argument('[output]', 'Output file or directory')
+  .option('-q, --quality <number>', 'AVIF quality (1-100, default: 65)')
+  .option('-r, --recursive', 'Process directories recursively')
+  .option('--force', 'Overwrite existing target files')
+  .action(createFormatCommand('avif'));
 
 // 格式转换命令
 program
@@ -262,8 +309,8 @@ program
       });
       
       spinner.succeed(chalk.green(`\n✓ Converted successfully!`));
-      console.log(chalk.gray(`  Original: ${result.originalSize} bytes`));
-      console.log(chalk.gray(`  Converted: ${result.convertedSize} bytes`));
+      console.log(chalk.gray(`  Original: ${formatFileSize(result.originalSize)}`));
+      console.log(chalk.gray(`  Converted: ${formatFileSize(result.convertedSize)}`));
       console.log(chalk.green(`  Saved: ${result.savedPercent}%`));
     } catch (error) {
       spinner.fail(chalk.red(`\n✗ Error: ${error.message}`));
@@ -280,7 +327,7 @@ program
       const info = await getImageInfo(file);
       console.log(chalk.cyan('\n📷 Image Information\n'));
       console.log(chalk.white(`  File: ${chalk.bold(info.fileName)}`));
-      console.log(chalk.white(`  Size: ${info.size} bytes (${(info.size / 1024).toFixed(2)} KB)`));
+      console.log(chalk.white(`  Size: ${formatFileSize(info.size)}`));
       console.log(chalk.white(`  Format: ${chalk.green(info.format)}`));
       console.log(chalk.white(`  Dimensions: ${info.width} x ${info.height} px`));
       if (info.hasAlpha) {
@@ -295,82 +342,88 @@ program
     }
   });
 
-// 批量处理函数 - 处理所有图片并转换为 WebP
-async function processAllImagesToWebp(sourceDir, config) {
+// Web UI 命令
+program
+  .command('ui')
+  .description('Launch web UI for image optimization')
+  .option('-p, --port <number>', 'Server port (default: 3000)', '3000')
+  .action(async (options) => {
+    const port = parseInt(options.port);
+    try {
+      await startUIServer(port);
+    } catch (error) {
+      console.log(chalk.red(`✗ Error: ${error.message}`));
+      process.exit(1);
+    }
+  });
+
+// 批量处理函数 - 处理所有图片，支持并发
+async function processAllImages(sourceDir, options = {}) {
+  const { quality = 80, targetFormat = 'webp', concurrency = 4 } = options;
   const pattern = `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,tif,bmp,svg,avif,webp}`;
   const files = await glob(pattern, { nodir: true });
   
-  // 过滤掉已经是 webp 的文件（只压缩不转换）
-  const imageFiles = files.filter(f => !f.toLowerCase().endsWith('.webp'));
-  const webpFiles = files.filter(f => f.toLowerCase().endsWith('.webp'));
-  
-  // 检查是否有可处理的图片
-  if (imageFiles.length === 0 && webpFiles.length === 0) {
+  if (files.length === 0) {
     console.log(chalk.yellow(`\n⚠ No images found in current directory`));
     console.log(chalk.gray(`  Supported formats: jpg, jpeg, png, gif, tiff, tif, bmp, svg, avif, webp`));
     console.log(chalk.gray(`  Run 'imgmin --help' for usage information\n`));
     return { 
-      success: 0, 
-      converted: 0,
-      skipped: 0,
-      webpOptimized: 0,
-      failed: 0,
-      totalSavedPercent: '0.0'
+      success: 0, converted: 0, skipped: 0, webpOptimized: 0, avifOptimized: 0,
+      failed: 0, totalOriginalSize: 0, totalConvertedSize: 0, totalSavedPercent: '0.0'
     };
   }
   
   const results = { 
-    success: 0, 
-    converted: 0,
-    skipped: 0,
-    webpOptimized: 0,
-    failed: 0,
-    totalOriginalSize: 0,
-    totalConvertedSize: 0
+    success: 0, converted: 0, skipped: 0, webpOptimized: 0, avifOptimized: 0,
+    failed: 0, totalOriginalSize: 0, totalConvertedSize: 0, totalSavedPercent: '0.0'
   };
   
-  // 用于跟踪已处理的文件名，避免重复
   const processedFiles = new Map();
   
-  for (const file of files) {
-    try {
-      const ext = path.extname(file).toLowerCase();
-      const isAlreadyWebp = ext === '.webp';
-      
-      // 生成输出路径（确保唯一性）
-      let outputPath = generateUniqueOutputPath(file, '.webp', processedFiles);
-      
-      if (isAlreadyWebp) {
-        // 已经是 WebP 格式，只压缩不转换
-        await compressImageToWebp(file, outputPath, config.quality);
-        results.webpOptimized++;
-      } else {
-        // 转换为 WebP
-        await compressImageToWebp(file, outputPath, config.quality);
-        results.converted++;
-      }
-      
-      const originalSize = fs.statSync(file).size;
-      const compressedSize = fs.statSync(outputPath).size;
-      
-      results.totalOriginalSize += originalSize;
-      results.totalConvertedSize += compressedSize;
-      results.success++;
-      
-      // 记录已处理的文件
-      processedFiles.set(file, outputPath);
-    } catch (error) {
-      console.log(chalk.yellow(`\n⚠ Failed: ${file} - ${error.message}`));
+  // 并发处理
+  const processor = async (file) => {
+    const ext = path.extname(file).toLowerCase();
+    const isAlreadyWebp = ext === '.webp';
+    const isAlreadyAvif = ext === '.avif';
+    
+    // 确定目标格式和输出路径
+    const targetExt = isAlreadyWebp ? '.webp' : (isAlreadyAvif ? '.avif' : `.${targetFormat}`);
+    const outputPath = generateUniqueOutputPath(file, targetExt, processedFiles);
+    
+    if (isAlreadyWebp) {
+      await compressImageToFormat(file, outputPath, 'webp', quality);
+      results.webpOptimized++;
+    } else if (isAlreadyAvif) {
+      await compressImageToFormat(file, outputPath, 'avif', quality);
+      results.avifOptimized++;
+    } else {
+      await compressImageToFormat(file, outputPath, targetFormat, quality);
+      results.converted++;
+    }
+    
+    const originalSize = fs.statSync(file).size;
+    const compressedSize = fs.statSync(outputPath).size;
+    
+    results.totalOriginalSize += originalSize;
+    results.totalConvertedSize += compressedSize;
+    results.success++;
+    
+    processedFiles.set(file, outputPath);
+  };
+  
+  // 使用 batchProcess 并发处理，失败不中断
+  const batchResults = await batchProcess(files, processor, { parallel: true, concurrency });
+  
+  for (const r of batchResults) {
+    if (r.status === 'rejected') {
+      console.log(chalk.yellow(`\n⚠ Failed: ${r.reason?.message || r.reason}`));
       results.failed++;
     }
   }
   
   // 计算总节省百分比
-  if (results.totalOriginalSize > 0) {
-    const savedPercent = ((results.totalOriginalSize - results.totalConvertedSize) / results.totalOriginalSize * 100).toFixed(1);
-    results.totalSavedPercent = savedPercent;
-  } else {
-    results.totalSavedPercent = '0.0';
+  if (results.totalOriginalSize > 0 && results.totalConvertedSize > 0) {
+    results.totalSavedPercent = ((results.totalOriginalSize - results.totalConvertedSize) / results.totalOriginalSize * 100).toFixed(1);
   }
   
   return results;
@@ -531,53 +584,71 @@ async function processDirectory(sourceDir, outputDir, options, spinner) {
   return results;
 }
 
-async function processDirectoryToWebp(sourceDir, outputDir, options, spinner) {
-  const { quality, recursive } = options;
+// 通用批量转换函数 - 将图片转换为指定格式，支持并发和强制覆盖
+async function processDirectoryToFormat(sourceDir, outputDir, format, options, spinner) {
+  const { quality, recursive, force = false, concurrency = 4 } = options;
+  const formatExt = `.${format}`;
+  const formatUpper = format.toUpperCase();
+  const inputExts = 'jpg,jpeg,png,gif,tiff,tif,bmp,svg,avif';
   const pattern = recursive 
-    ? `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,tif,bmp,svg,avif}`
-    : `${sourceDir}/*.{jpg,jpeg,png,gif,tiff,tif,bmp,svg,avif}`;
+    ? `${sourceDir}/**/*.{${inputExts}}`
+    : `${sourceDir}/*.{${inputExts}}`;
   
   const files = await glob(pattern, { nodir: true });
   const filteredFiles = files.filter(f => !path.basename(f).includes('_compressed'));
-  const results = { success: 0, failed: 0, skipped: 0 };
+  const results = { success: 0, failed: 0, skipped: 0, totalOriginalSize: 0, totalConvertedSize: 0 };
   const total = filteredFiles.length;
   
-  for (let i = 0; i < filteredFiles.length; i++) {
-    const file = filteredFiles[i];
-    if (spinner) {
-      spinner.text = `Converting [${i + 1}/${total}] ${path.basename(file)}`;
-    }
-    try {
-      const relativePath = path.relative(sourceDir, file);
-      const baseName = path.basename(file, path.extname(file));
-      const dirName = path.dirname(file);
-      let outputPath;
-      
-      if (outputDir) {
-        outputPath = path.join(outputDir, relativePath.replace(/\.[^.]+$/, '.webp'));
-        const outDir = path.dirname(outputPath);
-        if (!fs.existsSync(outDir)) {
-          fs.mkdirSync(outDir, { recursive: true });
-        }
-        if (fs.existsSync(outputPath)) {
-          console.log(chalk.gray(`  Skip (exists): ${file}`));
-          results.skipped++;
-          continue;
-        }
-      } else {
-        outputPath = path.join(dirName, `${baseName}.webp`);
-        if (fs.existsSync(outputPath)) {
-          console.log(chalk.gray(`  Skip (WebP exists): ${file}`));
-          results.skipped++;
-          continue;
-        }
+  // 并发处理
+  const processor = async (file) => {
+    const relativePath = path.relative(sourceDir, file);
+    const baseName = path.basename(file, path.extname(file));
+    const dirName = path.dirname(file);
+    let outputPath;
+    
+    if (outputDir) {
+      outputPath = path.join(outputDir, relativePath.replace(/\.[^.]+$/, formatExt));
+      const outDir = path.dirname(outputPath);
+      if (!fs.existsSync(outDir)) {
+        fs.mkdirSync(outDir, { recursive: true });
       }
-      
-      await compressImageToWebp(file, outputPath, parseInt(quality));
-      results.success++;
-    } catch (error) {
-      console.log(chalk.yellow(`\n⚠ Failed: ${file} - ${error.message}`));
-      results.failed++;
+      if (!force && fs.existsSync(outputPath)) {
+        console.log(chalk.gray(`  Skip (exists): ${file}`));
+        results.skipped++;
+        return;
+      }
+    } else {
+      outputPath = path.join(dirName, `${baseName}${formatExt}`);
+      if (!force && fs.existsSync(outputPath)) {
+        console.log(chalk.gray(`  Skip (${formatUpper} exists): ${file}`));
+        results.skipped++;
+        return;
+      }
+    }
+    
+    await compressImageToFormat(file, outputPath, format, parseInt(quality));
+    
+    const originalSize = fs.statSync(file).size;
+    const convertedSize = fs.statSync(outputPath).size;
+    results.totalOriginalSize += originalSize;
+    results.totalConvertedSize += convertedSize;
+    results.success++;
+  };
+  
+  // 使用 batchProcess 并发，分批处理以更新 spinner
+  const batchSize = concurrency;
+  for (let i = 0; i < filteredFiles.length; i += batchSize) {
+    const batch = filteredFiles.slice(i, i + batchSize);
+    if (spinner) {
+      const progress = Math.min(i + batchSize, filteredFiles.length);
+      spinner.text = `Converting [${progress}/${total}]...`;
+    }
+    const batchResults = await batchProcess(batch, processor, { parallel: true, concurrency });
+    for (const r of batchResults) {
+      if (r.status === 'rejected') {
+        console.log(chalk.yellow(`\n⚠ Failed: ${r.reason?.message || r.reason}`));
+        results.failed++;
+      }
     }
   }
   
@@ -685,22 +756,25 @@ async function compressSingleFile(source, output, options) {
   return result;
 }
 
-async function convertToWebpSingle(source, output, options) {
+// 通用单文件转换函数 - 将单个图片转换为指定格式（webp 或 avif）
+async function convertToFormatSingle(source, output, format, options) {
   const stats = fs.statSync(source);
-  const { quality } = options;
+  const { quality, force = false } = options;
   const baseName = path.basename(source, path.extname(source));
   const dirName = path.dirname(source);
+  const formatExt = `.${format}`;
+  const formatUpper = format.toUpperCase();
   
   if (!output) {
-    output = path.join(dirName, `${baseName}.webp`);
+    output = path.join(dirName, `${baseName}${formatExt}`);
   }
   
-  // 检查是否已存在 webp
-  if (fs.existsSync(output)) {
-    return { success: true, skipped: true, message: 'WebP file already exists' };
+  // 检查是否已存在目标格式文件
+  if (!force && fs.existsSync(output)) {
+    return { success: true, skipped: true, message: `${formatUpper} file already exists (use --force to overwrite)` };
   }
   
-  await compressImageToWebp(source, output, parseInt(quality));
+  await compressImageToFormat(source, output, format, parseInt(quality));
   
   const originalSize = stats.size;
   const convertedSize = fs.statSync(output).size;

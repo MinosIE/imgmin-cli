@@ -1,6 +1,6 @@
 # imgmin-cli
 
-图片压缩与格式转换 CLI 工具，基于 sharp 实现。
+图片压缩与格式转换 CLI 工具，基于 sharp 实现。支持 WebP 和 AVIF 等现代图片格式。
 
 ## 安装
 
@@ -20,10 +20,14 @@ npm link
 cd /path/to/images
 imgmin                    # 自动处理所有图片！
 
+# 或者使用 Web UI（推荐新手）
+imgmin ui                 # 启动浏览器界面，拖拽即可压缩
+
 # 或者使用具体命令
 imgmin c photo.jpg        # 压缩并生成 webp
 imgmin c .                # 压缩当前目录所有图片
 imgmin webp ./images -r   # 批量转换为 webp
+imgmin avif ./images -r   # 批量转换为 avif
 ```
 
 ## 命令
@@ -32,23 +36,32 @@ imgmin webp ./images -r   # 批量转换为 webp
 
 ```bash
 imgmin
+imgmin -q 85               # 设置质量
+imgmin -f avif              # 默认转换为 AVIF（而非 WebP）
 
 # 直接运行，自动处理当前目录及其子目录下的所有图片
-# - 非 WebP 格式：转换为 WebP 并压缩（输出到原目录）
+# - 非 WebP/AVIF 格式：转换为指定格式并压缩（默认 WebP，可通过 -f avif 改为 AVIF）
 # - WebP 格式：压缩优化
+# - AVIF 格式：压缩优化
+# - 并发处理（4 线程），加快处理速度
 # - 自动处理文件名冲突（添加 _1, _2 等后缀）
 ```
+
+**选项：**
+- `-q, --quality <number>` - 压缩质量 1-100（默认使用配置值 80）
+- `-f, --format <type>` - 目标转换格式（webp 或 avif，默认 webp）
 
 **特性：**
 - 零配置运行，无需任何参数
 - 递归扫描当前目录及所有子目录
-- 自动转换为 WebP 格式（节省最多 80% 体积）
-- WebP 格式文件也会被压缩优化
+- 自动转换为 WebP/AVIF 格式（可通过 `-f` 切换）
+- WebP 和 AVIF 格式文件也会被压缩优化
+- 并发处理加速（默认 4 线程）
 - 智能文件名管理，避免覆盖原文件
-- 显示详细统计信息（处理数量、转换数量、WebP 优化数量、失败数量、总节省百分比）
+- 显示详细统计信息（处理数量、转换数量、优化数量、总节省大小和百分比）
 
 **输出说明：**
-- 生成的 `.webp` 文件保存在**原图片所在目录**
+- 生成的 `.webp`/`.avif` 文件保存在**原图片所在目录**
 - 如果同名文件已存在，自动添加数字后缀（如 `photo_1.webp`, `photo_2.webp`）
 - 不会删除或修改原始图片文件
 
@@ -77,7 +90,7 @@ imgmin config -r               # 重置所有配置
 |---|---|---|---|
 | `quality` | number | 80 | 压缩质量 1-100 |
 | `format` | string | - | 默认输出格式 |
-| `recursive` | boolean | false | 是否递归处理目录（注：compress/webp 命令实际默认递归，此配置仅影响其他命令） |
+| `recursive` | boolean | false | 是否递归处理目录（注：compress/webp/avif 命令实际默认递归，此配置仅影响其他命令） |
 | `outputDir` | string | - | 默认输出目录 |
 
 配置文件位于 `~/.imgminrc`
@@ -133,23 +146,63 @@ imgmin webp <source> [output] [options]
 imgmin webp input.png                        # 转换为 input.webp
 imgmin webp input.jpg -q 75                  # 设置质量
 imgmin webp ./images ./output -r             # 批量转换到输出目录
+imgmin webp ./images --force                 # 强制覆盖已存在的 WebP 文件
 ```
 
 **选项：**
-- `-q, --quality <number>` - 质量 1-100
+- `-q, --quality <number>` - 质量 1-100（默认 80）
 - `-r, --recursive` - 递归处理子目录（默认启用，使用 --no-recursive 关闭）
+- `--force` - 强制覆盖已存在的目标文件
 
 **输出行为：**
 - **无 output 参数时**：在原目录生成 `<filename>.webp`
 - **有 output 参数时**：输出到指定文件或目录
-- **跳过已存在的文件**：如果目标 `.webp` 文件已存在，自动跳过
+- **跳过已存在的文件**：默认跳过已存在的 `.webp`，使用 `--force` 覆盖
+- **并发处理**：默认 4 线程并发转换
 
 **目录处理输出统计：**
 - `Converted X files to WebP` - 成功转换的文件数
+- `Total saved: XX% (XX KB)` - 总节省百分比和大小
+- `Original total → WebP total` - 原始总大小 vs WebP 总大小
 - `Skipped: X files` - 跳过的文件数（WebP 已存在）
 - `Failed: X files` - 转换失败的文件数
 
 **提示：** 使用 `imgmin c` 命令会同时压缩并生成 webp，更方便！
+
+### avif - 转换为 AVIF
+
+```bash
+imgmin avif <source> [output] [options]
+
+# 示例
+imgmin avif input.png                        # 转换为 input.avif
+imgmin avif input.jpg -q 65                  # 设置质量（推荐 50-65）
+imgmin avif ./images ./output -r             # 批量转换到输出目录
+imgmin avif ./images --force                 # 强制覆盖已存在的 AVIF 文件
+```
+
+**选项：**
+- `-q, --quality <number>` - 质量 1-100（默认 65，AVIF 推荐使用较低质量值）
+- `-r, --recursive` - 递归处理子目录（默认启用，使用 --no-recursive 关闭）
+- `--force` - 强制覆盖已存在的目标文件
+
+**输出行为：**
+- **无 output 参数时**：在原目录生成 `<filename>.avif`
+- **有 output 参数时**：输出到指定文件或目录
+- **跳过已存在的文件**：默认跳过已存在的 `.avif`，使用 `--force` 覆盖
+- **并发处理**：默认 4 线程并发转换
+
+**目录处理输出统计：**
+- `Converted X files to AVIF` - 成功转换的文件数
+- `Total saved: XX% (XX KB)` - 总节省百分比和大小
+- `Original total → AVIF total` - 原始总大小 vs AVIF 总大小
+- `Skipped: X files` - 跳过的文件数（AVIF 已存在）
+- `Failed: X files` - 转换失败的文件数
+
+**提示：** 
+- AVIF 通常比 WebP 压缩率更高（节省约 20-50% 体积），但编码速度较慢
+- AVIF 推荐质量范围为 50-65，相当于 WebP 80 的视觉效果
+- 设置质量 >70 时会显示提示建议降低质量
 
 ### convert - 格式转换
 
@@ -176,6 +229,31 @@ imgmin info <file>
 # 示例
 imgmin info input.jpg
 ```
+
+### ui - Web 图形界面
+
+```bash
+imgmin ui                  # 启动 UI（默认端口 3000）
+imgmin ui -p 8080          # 自定义端口
+
+# 启动后自动打开浏览器，支持：
+# - 拖拽上传图片（最多 50 张）
+# - 格式选择（WebP、AVIF、JPEG、PNG、保留原格式）
+# - 质量滑块调节
+# - 实时压缩结果和统计
+# - 单张/批量下载压缩后的图片
+```
+
+**选项：**
+- `-p, --port <number>` - 服务端口（默认 3000）
+
+**特性：**
+- 深色专业风格 UI
+- 拖拽或点击上传图片
+- 格式和质量实时切换
+- 压缩后即时显示节省百分比和大小
+- 图片缩略图预览
+- AVIF 高质量自动提醒
 
 ## 支持格式
 
@@ -234,6 +312,23 @@ console.log(result);
 //   output: 'output.webp',
 //   originalSize: 1234567,
 //   compressedSize: 456789
+// }
+```
+
+#### 批量转换为 AVIF
+
+```javascript
+import { compressImageToAvif } from 'imgmin-cli/src/compress.js';
+
+// 转换并指定质量
+const result = await compressImageToAvif('input.png', 'output.avif', 65);
+
+console.log(result);
+// {
+//   input: 'input.png',
+//   output: 'output.avif',
+//   originalSize: 1234567,
+//   compressedSize: 234567
 // }
 ```
 
@@ -329,3 +424,5 @@ console.log(files);
 - [commander](https://github.com/tj/commander.js) - CLI 框架
 - [chalk](https://github.com/chalk/chalk) - 终端着色
 - [ora](https://github.com/sindresorhus/ora) - 加载动画
+- [express](https://expressjs.com/) - Web UI 服务
+- [multer](https://github.com/expressjs/multer) - 文件上传处理
