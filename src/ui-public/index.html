@@ -691,8 +691,12 @@
         <path d="M32 4V20M24 12L32 4L40 12" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
       <div class="drop-title">Drop images here</div>
-      <div class="drop-subtitle">or <em>click to browse</em> — JPG, PNG, GIF, WebP, AVIF, TIFF</div>
+      <div class="drop-subtitle">
+        or <em class="pick-files">browse files</em> · <em class="pick-folder">pick a folder</em>
+        <br>JPG, PNG, GIF, WebP, AVIF, TIFF
+      </div>
       <input type="file" id="fileInput" accept="image/*" multiple>
+      <input type="file" id="folderInput" webkitdirectory hidden>
     </div>
 
     <!-- Settings -->
@@ -787,6 +791,7 @@
     // DOM refs
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('fileInput');
+    const folderInput = document.getElementById('folderInput');
     const processBtn = document.getElementById('processBtn');
     const progressBar = document.getElementById('progressBar');
     const progressFill = document.getElementById('progressFill');
@@ -877,13 +882,80 @@
     dropZone.addEventListener('dragleave', () => {
       dropZone.classList.remove('drag-over');
     });
-    dropZone.addEventListener('drop', (e) => {
+    dropZone.addEventListener('drop', async (e) => {
       e.preventDefault();
       dropZone.classList.remove('drag-over');
-      handleFiles(e.dataTransfer.files);
+      const items = e.dataTransfer.items;
+      if (items && items.length > 0) {
+        const files = await getFilesFromDataTransfer(items);
+        if (files.length > 0) handleFiles(files);
+      } else {
+        handleFiles(e.dataTransfer.files);
+      }
     });
-    dropZone.addEventListener('click', () => fileInput.click());
+
+    // Click on drop zone opens file picker (except when clicking the folder link)
+    dropZone.addEventListener('click', (e) => {
+      if (e.target.closest('.pick-folder')) return;
+      fileInput.click();
+    });
     fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+
+    // Folder picker
+    document.querySelector('.pick-folder').addEventListener('click', (e) => {
+      e.stopPropagation();
+      folderInput.click();
+    });
+    document.querySelector('.pick-files').addEventListener('click', (e) => {
+      e.stopPropagation();
+      fileInput.click();
+    });
+    folderInput.addEventListener('change', () => {
+      const files = folderInput.files;
+      if (files.length === 0) return;
+      handleFiles(files);
+      // Show folder name as context
+      const folderName = files[0].webkitRelativePath.split('/')[0] || '';
+      state._folderName = folderName;
+    });
+
+    // Recursively collect files from drag-drop items (supports folders)
+    async function getFilesFromDataTransfer(items) {
+      const entries = [];
+      for (const item of items) {
+        const entry = item.webkitGetAsEntry?.() ?? null;
+        if (entry) entries.push(entry);
+      }
+      const files = [];
+      let isFolder = false;
+      for (const entry of entries) {
+        if (entry.isDirectory) isFolder = true;
+        await traverseEntry(entry, files);
+      }
+      // Set folder context for display
+      if (isFolder) state._folderName = 'dropped folder';
+      else state._folderName = null;
+      return files;
+    }
+
+    async function traverseEntry(entry, files) {
+      if (entry.isFile) {
+        const file = await new Promise((resolve) => entry.file(resolve));
+        files.push(file);
+      } else if (entry.isDirectory) {
+        const reader = entry.createReader();
+        let allEntries = [];
+        // readEntries only returns up to 100 entries per call
+        while (true) {
+          const batch = await new Promise((resolve) => reader.readEntries(resolve));
+          if (batch.length === 0) break;
+          allEntries = allEntries.concat(Array.from(batch));
+        }
+        for (const child of allEntries) {
+          await traverseEntry(child, files);
+        }
+      }
+    }
 
     function handleFiles(fileList) {
       state.files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
@@ -893,6 +965,8 @@
       }
       processBtn.disabled = false;
       const dropTitle = dropZone.querySelector('.drop-title');
+      const folderContext = state._folderName ? ` from <em>${state._folderName}</em>` : '';
+
       if (state.files.length <= 3) {
         const names = state.files.map(f => f.name).join(', ');
         dropTitle.textContent = names;
@@ -901,7 +975,9 @@
         dropTitle.textContent = `${state.files.length} images selected`;
         dropTitle.title = state.files.map(f => f.name).join(', ');
       }
-      dropZone.querySelector('.drop-subtitle').innerHTML = 'Click <em>Compress</em> to process, or drop more images';
+      const suffix = ' or drop more images';
+      dropZone.querySelector('.drop-subtitle').innerHTML =
+        `Click <em>Compress</em> to process${folderContext}${suffix}`;
     }
 
     // Process
