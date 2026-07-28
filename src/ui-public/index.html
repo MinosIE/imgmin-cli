@@ -81,7 +81,7 @@
     .app-container {
       position: relative;
       z-index: 1;
-      max-width: 960px;
+      max-width: 1280px;
       margin: 0 auto;
       padding: 32px 24px 64px;
     }
@@ -152,6 +152,10 @@
       font-size: 20px;
       font-weight: 600;
       margin-bottom: 8px;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .drop-subtitle {
       font-size: 14px;
@@ -192,7 +196,7 @@
     /* Format selector */
     .format-options {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 8px;
     }
     .format-btn {
@@ -564,9 +568,18 @@
       cursor: pointer;
       transition: all var(--transition);
     }
-    .download-all-btn:hover {
+    .download-all-btn:hover:not(:disabled) {
       background: var(--success-glow);
       transform: translateY(-1px);
+    }
+    .download-all-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .download-all-btn .spinner {
+      width: 14px;
+      height: 14px;
     }
 
     /* Empty state */
@@ -767,6 +780,7 @@
       formats: ['original'],
       quality: 80,
       processing: false,
+      zipping: false,
       results: []
     };
 
@@ -878,7 +892,15 @@
         return;
       }
       processBtn.disabled = false;
-      dropZone.querySelector('.drop-title').textContent = `${state.files.length} images selected`;
+      const dropTitle = dropZone.querySelector('.drop-title');
+      if (state.files.length <= 3) {
+        const names = state.files.map(f => f.name).join(', ');
+        dropTitle.textContent = names;
+        dropTitle.title = names;
+      } else {
+        dropTitle.textContent = `${state.files.length} images selected`;
+        dropTitle.title = state.files.map(f => f.name).join(', ');
+      }
       dropZone.querySelector('.drop-subtitle').innerHTML = 'Click <em>Compress</em> to process, or drop more images';
     }
 
@@ -1045,10 +1067,18 @@
       a.click();
     }
 
-    // Download all as zip
+    // Download all as zip (with re-entry guard + loading state)
+    const downloadAllBtnOriginalHTML = downloadAllBtn.innerHTML;
+
     downloadAllBtn.addEventListener('click', async () => {
+      if (state.zipping) return;
+
       const successes = state.results.filter(r => r.success);
       if (successes.length === 0) return;
+
+      state.zipping = true;
+      downloadAllBtn.disabled = true;
+      downloadAllBtn.innerHTML = '<span class="spinner"></span> Preparing zip...';
 
       const filenames = successes.map(r => r.outputPath.split('/').pop());
 
@@ -1074,6 +1104,10 @@
         showToast(`Downloading ${successes.length} files as zip`, 'success');
       } catch (err) {
         showToast(err.message, 'error');
+      } finally {
+        state.zipping = false;
+        downloadAllBtn.disabled = false;
+        downloadAllBtn.innerHTML = downloadAllBtnOriginalHTML;
       }
     });
 
