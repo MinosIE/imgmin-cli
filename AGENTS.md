@@ -121,6 +121,8 @@ CLI 智能：`imgmin smart <src> → index.js → smartSuggest(file) → analyze
 - **现象**：`--no-recursive` 时一个文件都匹配不到 → **根因**：`glob` 的非递归分支没有解析 `{jpg,png}` 花括号，把整个 `{jpg,png}` 当成扩展名比较 → **正确**：`glob` 现统一走 `parseExtensions`（已在本次修复，勿回退）。
 - **现象**：`resize` 明明传了 `-w 0` / `--height 0.5` 却报 `width or height is required` → **根因**：`resizeImage` 用真值判断「是否传参」 → **正确**：以 `undefined` 判缺失、以 `<1` 判非法（已在本次修复）。
 - **现象**：并发压缩时报错或产物损坏 → **根因**：同目录多个源文件（`photo.jpg` + `photo.png`）映射到同一输出路径并发写 → **正确**：`processDirectory` / `processDirectoryResize` 用 `claimedOutputs` 认领路径，冲突者跳过并提示 `Skip (duplicate output)`。
+- **现象**：`/api/smart-analyze` 报 `ReferenceError: outputDir` → **根因**：该 handler 复用了 `/api/compress` 闭包里的 `outputDir`，自己没声明作用域 → **正确**：每个 handler 都自己写 `const outputDir = path.join(os.tmpdir(), 'imgmin-ui-output')`（已在 PRD §13 记录的那次修复）。
+- **现象**：`npm test` 里的 `tests/http.test.js` 起不来 / 跑完不退出 → **根因**：该文件会 `execFile` 派生子进程跑 `imgmin ui`（含 `setInterval` 清理定时器），父进程不应被拖住 → **正确**：用 `test.before` 起服务、`test.after` 里 `child.kill('SIGTERM')`；本地用 `IMGMIN_NO_BROWSER=1` 跳过弹浏览器。
 
 ### 3.5 推荐开发流程
 1. 改 `src/*.js`（ESM）或 `src/ui-public/index.html`。
@@ -160,7 +162,7 @@ CLI 智能：`imgmin smart <src> → index.js → smartSuggest(file) → analyze
 ## 5. 当前项目状态
 - **5.1 已完成**：CLI 全套命令（config/compress/webp/avif/convert/resize/info/ui/smart）；Web UI（拖放/文件夹/多选格式/质量滑块/Download All zip/防重 loading；单图分析卡 + 多图可删文件列表）；智能模式（内容感知格式 + SSIM/Butteraugli 自适应质量，CLI 与 UI 双入口）；宽屏布局（容器 1440px，结果双列网格）；批量并发可调（`-j, --concurrency`，1-32）；首批自动化测试（`tests/*.test.js`，模块 + CLI 端到端）。
 - **5.2 开发中**：无。
-- **5.3 未完成计划**：Web UI 与 `/api/*` 端点缺少测试；批量目录智能模式在 CLI 的结果汇总未展示每张理由（仅打印到终端）。
+- **5.3 未完成计划**：Web UI 与 `/api/*` 端点已补端到端测试（`tests/http.test.js`，待本地执行验证）；批量目录智能模式在 CLI 的结果汇总未展示每张理由（仅打印到终端）。
 - **5.4 技术债务**：`findOptimalQuality` 的 Butteraugli 为近似实现，非 Google 原生；`processDirectory` 智能模式不写 `_compressed` 后缀（与常规模式命名不一致）；`resize` 对动图只取首帧（sharp 默认行为）。
 - **5.5 已知问题**：极小透明 PNG 转 PNG 可能变大（已改为默认转 WebP 缓解）；并发批处理为「分批 `Promise.allSettled`」，不是精细限流（单批内会同时启动 `concurrency` 个任务）。
 - **5.6 路线图**：Web API 集成测试；`--json`/`--dry-run` 输出；智能模式结果在 UI 汇总卡片展示 per-file 决策；支持 AVIF 之外的有损格式自适应。

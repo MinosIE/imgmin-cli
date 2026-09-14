@@ -285,7 +285,7 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 |---|---|---|---|---|
 | 高 | `imgmin resize` 子命令 | `resizeImage` 已实现且导出，但 CLI 无入口 | **已完成** | 见 §4.8：`-w/--width`、`--height`、`--fit`、`-q`、`-f`、`-r`、`-j`、`--force`；库层 `resizeImage` 同步扩展（`quality` / `format` / `resized`） |
 | 高 | 批量并发可调 `-j, --concurrency` | `batchProcess` 支持该参数，但 CLI 硬编码为 4 | **已完成** | 默认命令 / compress / webp / avif / resize 均已支持（1-32，默认 4）；`-j 1` 退化为顺序处理 |
-| 高 | 自动化测试 | `npm test` 空跑，无 `*.test.js` | **部分完成** | 已补 `tests/*.test.js`：utils / compress / resize / convert / smart 模块用例（35 项已验证通过）+ CLI 端到端用例（已编写，待执行验证）；**Web UI 与 `/api/*` 端点仍未覆盖** |
+| 高 | 自动化测试 | `npm test` 空跑，无 `*.test.js` | **部分完成** | 已补 `tests/*.test.js`：utils / compress / resize / convert / smart 模块用例（35 项已验证通过）+ CLI 端到端用例（已编写，待执行验证）+ `tests/http.test.js` 覆盖 `/api/compress`、`/api/info`、`/api/smart-analyze`、`/api/download-zip`（启动真实 UI 服务，需本地执行验证）；Web API 用例因派生子进程，本环境被跳过 |
 | 中 | WebP / AVIF 无损 `--lossless` | sharp 的 `lossless` 选项未暴露 | 未开始 | 可在 `applyEncoder` 内按格式增加分支，需同步 §5 编解码说明 |
 | 中 | 体积 / 尺寸预算 `--max-size 200kb` | 无 | 未开始 | 可复用 `findOptimalQuality` 的二分骨架，改为「按目标体积搜索质量」 |
 | 中 | CI 友好输出 `--json` / `--dry-run` / `--quiet` | 无，只能解析彩色文本 | 未开始 | `--dry-run` 可与现有「跳过判定」逻辑复用，`--json` 需统一各命令结果结构 |
@@ -305,7 +305,7 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 - **智能模式 · 指标精度**：以更精确的实现（原生 SSIM / Butteraugli 绑定）替换当前近似算法。
 - **智能模式 · 自适应质量扩展**：把自适应质量扩展到 AVIF 之外的有损格式（当前 JPEG / PNG 走固定质量）。
 - **并发模型**：当前为分批 `Promise.allSettled`，如需精细限流可引入 `p-limit` 风格调度。
-- **测试**：补充 Web UI 与 `/api/*` 端点的集成测试（`/api/compress`、`/api/info`、`/api/smart-analyze`、`/api/download-zip`）。
+- **测试**：补充 Web UI 与 `/api/*` 端点的集成测试（`/api/compress`、`/api/info`、`/api/smart-analyze`、`/api/download-zip`）——**已完成**，见 `tests/http.test.js`（派生子进程启动真实 UI 服务，待本地执行验证）。
 
 ### 11.3 本次迭代（2026-09-14）完成情况
 
@@ -338,6 +338,11 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
   - `smartSuggest` 未返回 `originalSize`，导致 `imgmin smart` 打印 `NaN undefined`。
   - `resizeImage` 的「参数缺失」与「参数非法」校验顺序错误（`width/height` 为 0 时被误判为未传）。
 - **`compress.js` 结构调整**：抽出 `applyEncoder`（编码参数统一收口，质量统一夹取到 1-100）并新增 `isEncodableFormat` / `RESIZE_FITS` 导出。
+
+### 2026-09-14 · Web API 集成测试 + 修复 smart-analyze
+- 新增 `tests/http.test.js`：派生子进程启动真实 UI 服务（`IMGMIN_NO_BROWSER=1`），端到端覆盖 `/api/compress`、`/api/info`、`/api/smart-analyze`、`/api/download-zip`（含产物下载与 zip 头 `PK` 校验）。
+- 修复 `/api/smart-analyze`：该 handler 引用了 `outputDir`，但只声明在 `/api/compress` 闭包内，自身作用域未声明，命中即抛 `ReferenceError`；现显式声明 `const outputDir = path.join(os.tmpdir(), 'imgmin-ui-output')`。
+- `startUIServer` 支持 `IMGMIN_NO_BROWSER=1` 跳过自动打开浏览器，便于测试 / CI。
 
 ### 2026-09-14 · 进度可视化（第 11 节重构）
 - 第 11 节由「路线图（候选 / 当前未实现）」重构为「**能力缺口与路线图（含执行进度）**」：
