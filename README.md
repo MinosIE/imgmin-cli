@@ -128,6 +128,8 @@ imgmin c input.jpg --no-webp                  # 只压缩，不生成 WebP 版�
 - `--metric <type>` - 智能模式指标：`ssim`（默认）或 `butteraugli`
 - `--threshold <number>` - 智能模式质量阈值（SSIM≥0.95、Butteraugli≤1.2 为默认）
 - `-j, --concurrency <number>` - 目录并发数（默认 4，上限 32）
+- `--lossless` - 无损编码：WebP / AVIF / TIFF 走原生无损，PNG 拉满压缩级别，JPEG 退回最高质量 q100
+- `--max-size <size>` - 目标体积上限，如 `200kb` / `1.5mb`；二分搜索最高质量使产物 ≤ 该体积
 
 **输出行为：**
 - **无 output 参数时**：在原目录生成 `<filename>_compressed.<ext>` 和 `<filename>.webp`
@@ -148,6 +150,7 @@ imgmin c input.jpg --no-webp                  # 只压缩，不生成 WebP 版�
 - `c` 是 `compress` 的简短形式，两者功能完全相同
 - 如果压缩后文件更大，会自动跳过并删除生成的文件（正常模式和 `--force` 模式均适用），避免浪费磁盘空间
 - **PNG 格式注意**：对于小尺寸或已优化的 PNG 文件，压缩后可能会变大（这是 PNG 无损格式的特性）。工具会自动检测并跳过此类文件。如需更好压缩效果，建议转换为 WebP 格式或使用 `--format webp` 选项。
+- **无损与目标体积互斥**：`--lossless` 优先，`--max-size` 会被忽略（无损体积通常最大）；JPEG 无原生无损，开启 `--lossless` 实际为最高质量 q100（结果会给出提示，并非真正无损）。
 
 ### webp - 转换为 WebP
 

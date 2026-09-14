@@ -3,9 +3,10 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import chalk from 'chalk';
 import { ZipArchive } from 'archiver';
-import { compressImage, compressImageToFormat } from './compress.js';
-import { getImageInfo, formatFileSize, analyzeCompressibility } from './utils.js';
+import { compressImage, compressImageToFormat, losslessNoteFor } from './compress.js';
+import { getImageInfo, formatFileSize, analyzeCompressibility, parseSizeToBytes } from './utils.js';
 import { smartSuggest } from './smart.js';
 
 const app = express();
@@ -48,6 +49,7 @@ app.post('/api/compress', upload.array('images', 50), async (req, res) => {
     const smart = req.body.smart === '1';
     const metric = req.body.metric || 'ssim';
     const lossless = req.body.lossless === '1';
+    const maxSize = req.body.maxSize ? parseSizeToBytes(req.body.maxSize) : undefined;
 
     // Support both single format string and formats[] array
     let formats = [];
@@ -80,7 +82,7 @@ app.post('/api/compress', upload.array('images', 50), async (req, res) => {
           const baseName = path.basename(file.originalname, path.extname(file.originalname));
           const outputPath = path.join(outputDir, `${baseName}_${Date.now()}.${ext}`);
 
-          await compressImage(file.path, outputPath, { quality: sugg.quality, format: ext, lossless });
+          await compressImage(file.path, outputPath, { quality: sugg.quality, format: ext, lossless, maxSize });
 
           const originalSize = fs.statSync(file.path).size;
           const compressedSize = fs.statSync(outputPath).size;
@@ -123,6 +125,7 @@ app.post('/api/compress', upload.array('images', 50), async (req, res) => {
               originalSize,
               compressedSize,
               savedPercent,
+              losslessNote: losslessNoteFor(ext, lossless),
               width: metadata.width,
               height: metadata.height,
               outputPath,
@@ -141,7 +144,8 @@ app.post('/api/compress', upload.array('images', 50), async (req, res) => {
               const result = await compressImage(file.path, outputPath, {
                 quality: parseInt(quality),
                 format: ext,
-                lossless
+                lossless,
+                maxSize
               });
 
               const originalSize = result.originalSize;
@@ -176,6 +180,7 @@ app.post('/api/compress', upload.array('images', 50), async (req, res) => {
                   compressedSize,
                   savedPercent,
                   format: ext,
+                  losslessNote: losslessNoteFor(ext, lossless),
                   width: metadata.width,
                   height: metadata.height,
                   outputPath,
@@ -401,10 +406,10 @@ export async function startUIServer(port = 3000) {
       const addr = server.address();
       const actualPort = addr.port;
 
-      console.log(`\n  imgmin UI is running!\n`);
-      console.log(`  Local:   http://localhost:${actualPort}`);
-      console.log(`  Press Ctrl+C to stop\n`);
-      console.log(`  TIP: Keep this terminal window open while using the UI.\n`);
+      console.log(`\n  ${chalk.green.bold('imgmin UI is running!')}\n`);
+      console.log(`  ${chalk.cyan('Local:')}   ${chalk.cyan.underline(`http://localhost:${actualPort}`)}`);
+      console.log(`  ${chalk.gray('Press Ctrl+C to stop')}\n`);
+      console.log(`  ${chalk.gray('TIP:')} ${chalk.gray('Keep this terminal window open while using the UI.')}\n`);
 
       // Try to open browser（IMGMIN_NO_BROWSER=1 时跳过，便于测试 / CI）
       if (process.env.IMGMIN_NO_BROWSER !== '1') {
@@ -415,7 +420,7 @@ export async function startUIServer(port = 3000) {
         else command = `xdg-open http://localhost:${actualPort}`;
 
         exec(command, (err) => {
-          if (err) console.log(`  Could not auto-open browser. Visit: http://localhost:${actualPort}\n`);
+          if (err) console.log(`  ${chalk.gray(`Could not auto-open browser. Visit: http://localhost:${actualPort}`)}`);
         });
       }
 
@@ -426,7 +431,7 @@ export async function startUIServer(port = 3000) {
       if (resolved) return; // Already started successfully
 
       if (err.code === 'EADDRINUSE') {
-        console.log(`  Port ${port} is in use, trying port ${port + 1}...`);
+        console.log(`  ${chalk.yellow(`Port ${port} is in use, trying port ${port + 1}...`)}`);
         server.close(() => {
           tryListen(port + 1);
         });
@@ -437,7 +442,7 @@ export async function startUIServer(port = 3000) {
 
     // Graceful shutdown
     const shutdown = () => {
-      console.log('\n  Shutting down imgmin UI...');
+      console.log(`\n  ${chalk.yellow('Shutting down imgmin UI...')}`);
       server.close(() => process.exit(0));
       setTimeout(() => process.exit(0), 3000);
     };

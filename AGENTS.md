@@ -115,6 +115,7 @@ CLI 智能：`imgmin smart <src> → index.js → smartSuggest(file) → analyze
 - **现象**：`imgmin: command not found` → **根因**：未全局链接 → **正确**：`npm link`（本项目从未预装全局）。
 - **现象**：下载 zip 报 `TypeError: self._module.on is not a function` → **根因**：archiver v8 是纯 ESM，`new archiver.Archiver('zip', opts)` 实例化的是未初始化 `_module` 的基类 → **正确**：`import { ZipArchive } from 'archiver'; new ZipArchive({ zlib: { level: 1 } })`（已在 `1f4cd88` 修复，勿回退）。
 - **现象**：压缩后文件反而变大 → **根因**：源已高度压缩 / 质量过高 → **正确**：`compressSingleFile`/`processDirectory` 已有「更大则跳过」逻辑；智能模式用低质量目标避免。
+- **现象**：`--lossless` 与 `--max-size` 同时传，WebP/AVIF 体积退化为恒定值（二分搜索永远达标/永远不达标）→ **根因**：lossless 分支忽略 quality，max-size 二分失效 → **正确**：引擎 6 处 maxSize 分支统一加 `&& !lossless` 守卫，无损优先、忽略 max-size；JPEG 无原生无损，`--lossless` 退回 q100，引擎返回 `losslessNote` 提示（CLI 黄色 ⚠、UI 橙色提示条），UI 勾选无损时自动禁用目标体积输入框。
 - **现象**：拖入文件夹提示「不支持」→ **根因**：`dataTransfer.files` 对文件夹为空 → **正确**：用 `webkitGetAsEntry()` 递归遍历（已在 `288a592` 修复）。
 - **现象**：UI 改了没反应 → **根因**：忘了重启 `imgmin ui`，或改错文件（应为 `src/ui-public/index.html` 而非其他） → **正确**：重启服务。
 - **现象**：`imgmin smart` 打印 `NaN undefined` → **根因**：`smartSuggest` 只返回 `size`，而 `index.js` 读的是 `originalSize` → **正确**：`smartSuggest` 现同时返回 `originalSize` 与 `size`，两个都别删（UI 的 `/api/smart-analyze` 用的是 `size`）。
@@ -160,7 +161,7 @@ CLI 智能：`imgmin smart <src> → index.js → smartSuggest(file) → analyze
 - 智能选格式 / 质量 → `src/smart.js`
 
 ## 5. 当前项目状态
-- **5.1 已完成**：CLI 全套命令（config/compress/webp/avif/convert/resize/info/ui/smart）；Web UI（拖放/文件夹/多选格式/质量滑块/Download All zip/防重 loading；单图分析卡 + 多图可删文件列表）；智能模式（内容感知格式 + SSIM/Butteraugli 自适应质量，CLI 与 UI 双入口）；宽屏布局（容器 1440px，结果双列网格）；批量并发可调（`-j, --concurrency`，1-32）；无损编码 `--lossless`（WebP/AVIF/TIFF 原生无损、PNG 拉满压缩、JPEG 退回最高质量，CLI 各命令 + UI「无损模式」开关双入口）；首批自动化测试（`tests/*.test.js`，模块 + CLI 端到端）。
+- **5.1 已完成**：CLI 全套命令（config/compress/webp/avif/convert/resize/info/ui/smart）；Web UI（拖放/文件夹/多选格式/质量滑块/Download All zip/防重 loading；单图分析卡 + 多图可删文件列表）；智能模式（内容感知格式 + SSIM/Butteraugli 自适应质量，CLI 与 UI 双入口）；宽屏布局（容器 1440px，结果双列网格）；批量并发可调（`-j, --concurrency`，1-32）；无损编码 `--lossless`（WebP/AVIF/TIFF 原生无损、PNG 拉满压缩、JPEG 退回最高质量，CLI 各命令 + UI「无损模式」开关双入口）；目标体积 `--max-size <size>`（CLI 各命令 + UI「目标体积」输入框双入口，经 `parseSizeToBytes` 解析，二分搜质量使产物 ≤ 目标体积）；首批自动化测试（`tests/*.test.js`，模块 + CLI 端到端）。
 - **5.2 开发中**：无。
 - **5.3 未完成计划**：Web UI 与 `/api/*` 端点已补端到端测试（`tests/http.test.js`，待本地执行验证）；批量目录智能模式在 CLI 的结果汇总未展示每张理由（仅打印到终端）。
 - **5.4 技术债务**：`findOptimalQuality` 的 Butteraugli 为近似实现，非 Google 原生；`processDirectory` 智能模式不写 `_compressed` 后缀（与常规模式命名不一致）；`resize` 对动图只取首帧（sharp 默认行为）。

@@ -203,6 +203,33 @@ export function formatFileSize(bytes) {
 }
 
 /**
+ * 把人类可读的体积字符串解析为字节数
+ * 支持：纯数字（按字节）、`200kb`/`200k`/`1.5mb`/`1.5m`/`800b`；单位不区分大小写。
+ * @param {string|number} input - 体积字符串或数字
+ * @returns {number|null} 字节数；无法解析时返回 null
+ */
+export function parseSizeToBytes(input) {
+  if (input === undefined || input === null || input === '') return null;
+  if (typeof input === 'number' && Number.isFinite(input)) return Math.max(1, Math.floor(input));
+
+  const str = String(input).trim().toLowerCase().replace(/,/g, '');
+  const m = str.match(/^([\d.]+)\s*([kmg]?b?)$/);
+  if (!m) return null;
+
+  const value = parseFloat(m[1]);
+  if (!Number.isFinite(value)) return null;
+
+  const unit = m[2];
+  const k = 1024;
+  let multiplier = 1;
+  if (unit.startsWith('k')) multiplier = k;
+  else if (unit.startsWith('m')) multiplier = k * k;
+  else if (unit.startsWith('g')) multiplier = k * k * k;
+
+  return Math.max(1, Math.floor(value * multiplier));
+}
+
+/**
  * 检查文件是否为图片
  * @param {string} filePath - 文件路径
  * @returns {boolean} 是否为图片

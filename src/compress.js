@@ -61,8 +61,37 @@ export function applyEncoder(pipeline, format, quality = 80, { lossless = false 
  * @param {number} options.quality - 质量 (1-100)
  * @param {string} options.format - 输出格式 (jpeg, png, webp, avif)
  */
+/**
+ * JPEG 无原生无损编码：开启 lossless 时退回最高质量 q100，并非真正无损。
+ * 在结果中附一行提示，避免用户误以为得到无损 JPEG。
+ * @param {string} format - 目标格式
+ * @param {boolean} lossless - 是否无损
+ * @returns {string|undefined} 提示文案；不冲突时返回 undefined
+ */
+export function losslessNoteFor(format, lossless) {
+  if (!lossless) return undefined;
+  const f = String(format || '').toLowerCase();
+  if (f === 'jpeg' || f === 'jpg') {
+    return 'JPEG 无原生无损，已退回最高质量 q100（非真正无损）';
+  }
+  return undefined;
+}
+
 export async function compressImage(inputPath, outputPath, options = {}) {
-  const { quality = 80, format, lossless = false } = options;
+  const { quality = 80, format, lossless = false, maxSize } = options;
+
+  // 目标体积优先：二分搜索最高质量使产物 ≤ maxSize
+  if (maxSize && maxSize > 0 && !lossless) {
+    const res = await compressImageMaxSize(inputPath, outputPath, { format, targetBytes: maxSize, lossless });
+    return {
+      input: res.input,
+      output: res.output,
+      originalSize: res.originalSize,
+      compressedSize: res.compressedSize,
+      quality: res.quality,
+      metTarget: res.metTarget
+    };
+  }
   
   // 确保输出目录存在
   const outputDir = path.dirname(outputPath);
@@ -81,7 +110,63 @@ export async function compressImage(inputPath, outputPath, options = {}) {
     input: inputPath,
     output: outputPath,
     originalSize: fs.statSync(inputPath).size,
-    compressedSize: fs.statSync(outputPath).size
+    compressedSize: fs.statSync(outputPath).size,
+    losslessNote: losslessNoteFor(targetFormat, lossless)
+  };
+}
+
+/**
+ * 按目标体积压缩：二分搜索最高质量，使产物体积 ≤ targetBytes。
+ * 质量越高体积越大，故以质量作为单调变量做二分；若质量 1 仍超限，退回质量 1（最小体积）并接受超限。
+ * @param {string} inputPath - 输入文件路径
+ * @param {string} outputPath - 输出文件路径
+ * @param {Object} options
+ * @param {string} [options.format] - 目标格式（缺省按输出扩展名）
+ * @param {number} options.targetBytes - 目标体积（字节）
+ * @param {boolean} [options.lossless] - 是否无损编码（与原生无损共用同一编码分支）
+ * @returns {Promise<Object>} 含 quality / compressedSize / metTarget 等
+ */
+export async function compressImageMaxSize(inputPath, outputPath, options = {}) {
+  const { format, targetBytes, lossless = false } = options;
+  if (!targetBytes || targetBytes <= 0) {
+    throw new Error('compressImageMaxSize: targetBytes required and must be > 0');
+  }
+
+  // 确保输出目录存在
+  const outputDir = path.dirname(outputPath);
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+
+  const targetFormat = format || path.extname(outputPath).toLowerCase().replace('.', '') || 'jpeg';
+
+  // 二分搜索：质量越高体积越大，找到「体积≤目标」的最高质量
+  let lo = 1, hi = 100, chosen = null;
+  for (let i = 0; i < 16 && lo <= hi; i++) {
+    const mid = Math.round((lo + hi) / 2);
+    const buf = await applyEncoder(sharp(inputPath), targetFormat, mid, { lossless }).toBuffer();
+    if (buf.length <= targetBytes) {
+      chosen = { quality: mid, size: buf.length };
+      lo = mid + 1; // 还能更高画质，继续往大搜
+    } else {
+      hi = mid - 1;
+    }
+  }
+
+  // 即便质量 1 仍超限：退回质量 1（最小体积），接受超限
+  const finalQuality = chosen ? chosen.quality : 1;
+
+  await applyEncoder(sharp(inputPath), targetFormat, finalQuality, { lossless }).toFile(outputPath);
+  const finalSize = fs.statSync(outputPath).size;
+
+  return {
+    input: inputPath,
+    output: outputPath,
+    originalSize: fs.statSync(inputPath).size,
+    compressedSize: finalSize,
+    quality: finalQuality,
+    targetBytes,
+    metTarget: finalSize <= targetBytes
   };
 }
 
@@ -91,7 +176,12 @@ export async function compressImage(inputPath, outputPath, options = {}) {
  * @param {string} outputPath - 输出文件路径
  * @param {number} quality - 质量 (1-100)
  */
-export async function compressImageToWebp(inputPath, outputPath, quality = 80, lossless = false) {
+export async function compressImageToWebp(inputPath, outputPath, quality = 80, lossless = false, maxSize) {
+  // 目标体积优先
+  if (maxSize && maxSize > 0 && !lossless) {
+    return compressImageMaxSize(inputPath, outputPath, { format: 'webp', targetBytes: maxSize, lossless });
+  }
+
   // 确保输出目录存在
   const outputDir = path.dirname(outputPath);
   if (!fs.existsSync(outputDir)) {
@@ -141,6 +231,7 @@ export async function resizeImage(inputPath, outputPath, options = {}) {
     quality,
     format,
     lossless = false,
+    maxSize,
     withoutEnlargement = true
   } = options;
   
@@ -168,18 +259,25 @@ export async function resizeImage(inputPath, outputPath, options = {}) {
   
   const inputMeta = await sharp(inputPath).metadata();
   
-  let pipeline = sharp(inputPath).resize(targetWidth ?? null, targetHeight ?? null, {
-    fit,
-    withoutEnlargement
-  });
+  const targetFormat = format || path.extname(outputPath).toLowerCase().replace('.', '');
   
-  // 指定 quality 时显式套用编码参数，否则沿用 sharp 对扩展名的默认推断
-  if (quality !== undefined && quality !== null) {
-    const targetFormat = format || path.extname(outputPath).toLowerCase().replace('.', '');
-    pipeline = applyEncoder(pipeline, targetFormat, quality, { lossless });
+  // 目标体积优先：先按比例缩放写临时文件，再按目标体积二分搜质量
+  if (quality !== undefined && quality !== null && maxSize && maxSize > 0 && !lossless) {
+    const tmpPath = path.join(outputDir, `.imgmin_tmp_${Date.now()}_${path.basename(outputPath)}`);
+    await sharp(inputPath).resize(targetWidth ?? null, targetHeight ?? null, { fit, withoutEnlargement }).toFile(tmpPath);
+    await compressImageMaxSize(tmpPath, outputPath, { format: targetFormat, targetBytes: maxSize, lossless });
+    try { fs.unlinkSync(tmpPath); } catch {}
+  } else {
+    let pipeline = sharp(inputPath).resize(targetWidth ?? null, targetHeight ?? null, {
+      fit,
+      withoutEnlargement
+    });
+    // 指定 quality 时显式套用编码参数，否则沿用 sharp 对扩展名的默认推断
+    if (quality !== undefined && quality !== null) {
+      pipeline = applyEncoder(pipeline, targetFormat, quality, { lossless });
+    }
+    await pipeline.toFile(outputPath);
   }
-  
-  await pipeline.toFile(outputPath);
   
   const outputMeta = await sharp(outputPath).metadata();
   const resized = outputMeta.width !== inputMeta.width || outputMeta.height !== inputMeta.height;
@@ -193,7 +291,8 @@ export async function resizeImage(inputPath, outputPath, options = {}) {
     originalHeight: inputMeta.height,
     width: outputMeta.width,
     height: outputMeta.height,
-    resized
+    resized,
+    losslessNote: losslessNoteFor(targetFormat, lossless)
   };
 }
 
@@ -203,7 +302,12 @@ export async function resizeImage(inputPath, outputPath, options = {}) {
  * @param {string} outputPath - 输出文件路径
  * @param {number} quality - 质量 (1-100)
  */
-export async function compressImageToAvif(inputPath, outputPath, quality = 80, lossless = false) {
+export async function compressImageToAvif(inputPath, outputPath, quality = 80, lossless = false, maxSize) {
+  // 目标体积优先
+  if (maxSize && maxSize > 0 && !lossless) {
+    return compressImageMaxSize(inputPath, outputPath, { format: 'avif', targetBytes: maxSize, lossless });
+  }
+
   // 确保输出目录存在
   const outputDir = path.dirname(outputPath);
   if (!fs.existsSync(outputDir)) {
@@ -234,7 +338,12 @@ export async function compressImageToAvif(inputPath, outputPath, quality = 80, l
  * @param {string} format - 目标格式 (webp, avif)
  * @param {number} quality - 质量 (1-100)
  */
-export async function compressImageToFormat(inputPath, outputPath, format, quality = 80, lossless = false) {
+export async function compressImageToFormat(inputPath, outputPath, format, quality = 80, lossless = false, maxSize) {
+  // 目标体积优先
+  if (maxSize && maxSize > 0 && !lossless) {
+    return compressImageMaxSize(inputPath, outputPath, { format, targetBytes: maxSize, lossless });
+  }
+
   const formatMap = {
     webp: (i, o, q) => compressImageToWebp(i, o, q, lossless),
     avif: (i, o, q) => compressImageToAvif(i, o, q, lossless)

@@ -287,7 +287,7 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 | 高 | 批量并发可调 `-j, --concurrency` | `batchProcess` 支持该参数，但 CLI 硬编码为 4 | **已完成** | 默认命令 / compress / webp / avif / resize 均已支持（1-32，默认 4）；`-j 1` 退化为顺序处理 |
 | 高 | 自动化测试 | `npm test` 空跑，无 `*.test.js` | **部分完成** | 已补 `tests/*.test.js`：utils / compress / resize / convert / smart 模块用例（35 项已验证通过）+ CLI 端到端用例（已编写，待执行验证）+ `tests/http.test.js` 覆盖 `/api/compress`、`/api/info`、`/api/smart-analyze`、`/api/download-zip`（启动真实 UI 服务，需本地执行验证）；Web API 用例因派生子进程，本环境被跳过 |
 | 中 | WebP / AVIF 无损 `--lossless` | sharp 的 `lossless` 选项未暴露 | **已完成** | `applyEncoder` 按格式分流：WebP/AVIF/TIFF 走原生 `lossless`，PNG 拉满压缩级别，JPEG 退回最高质量；CLI(默认/compress/webp/avif/convert/resize)与 UI(无损模式开关，开启后禁用质量滑块并接 `/api/compress?lossless=1`)双入口 |
-| 中 | 体积 / 尺寸预算 `--max-size 200kb` | 无 | 未开始 | 可复用 `findOptimalQuality` 的二分骨架，改为「按目标体积搜索质量」 |
+| 中 | 体积 / 尺寸预算 `--max-size 200kb` | 无 | **已完成** | `compressImageMaxSize` 二分搜质量使产物 ≤ 目标体积（`200kb`/`1.5mb` 等单位经 `parseSizeToBytes` 解析）；CLI(默认/compress/webp/avif/convert/resize)与 UI(目标体积输入框，接 `/api/compress?maxSize=`)双入口；与 `--lossless` 互斥（无损优先，忽略 max-size） |
 | 中 | CI 友好输出 `--json` / `--dry-run` / `--quiet` | 无，只能解析彩色文本 | 未开始 | `--dry-run` 可与现有「跳过判定」逻辑复用，`--json` 需统一各命令结果结构 |
 | 中 | `imgmin ui --host 0.0.0.0` | 仅支持 `-p` | 未开始 | 容器 / 局域网场景；需同步 §7.1 与 `startUIServer` |
 | 中 | 元数据控制 `--strip` / EXIF 自动旋转 | 未显式处理 | 未开始 | 涉及 sharp `withMetadata()` / `rotate()`，会改变现有「压缩即丢元数据」的隐含行为 |
@@ -351,6 +351,11 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 - `src/index.js`：各命令 action 读取 `options.lossless` 并贯穿 `processDirectory` / `processDirectoryToFormat` / `processDirectoryResize` / `compressSingleFile` / `convertToFormatSingle` / `resizeSingleFile`。
 - `src/ui.js`：`/api/compress` 读取 `req.body.lossless === '1'`，智能与非智能分支均透传 `compressImage`。
 - `tests/compress.test.js`：新增 3 个用例覆盖 `applyEncoder` 无损、`compressImage` lossless 透传、`compressImageToWebp` lossless 参数。
+
+### 2026-09-14 · 目标体积 --max-size 与无损冲突收口
+- 新增 CLI 选项 `--max-size <size>`（默认 / compress / webp / avif / convert / resize），经 `parseSizeToBytes` 解析 `200kb` / `1.5mb` 等单位；引擎 `compressImageMaxSize` 二分搜索最高质量使产物 ≤ 目标体积。
+- UI 新增「目标体积」输入框，以 `maxSize` 接入 `/api/compress`；勾选「无损模式」时该输入框自动禁用（无损优先，忽略 max-size）。
+- 冲突规则：① `--lossless` 优先于 `--max-size`，同时传入时忽略 max-size；② JPEG 无原生无损，开启 `--lossless` 退回最高质量 q100，结果附 `losslessNote` 提示（CLI 黄色 ⚠、UI 橙色提示条）。
 
 ### 2026-09-14 · 进度可视化（第 11 节重构）
 - 第 11 节由「路线图（候选 / 当前未实现）」重构为「**能力缺口与路线图（含执行进度）**」：

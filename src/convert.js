@@ -1,6 +1,7 @@
 import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
+import { compressImageMaxSize, losslessNoteFor } from './compress.js';
 
 /**
  * 图片格式转换
@@ -10,9 +11,10 @@ import path from 'path';
  * @param {string} options.format - 目标格式 (jpeg, png, webp, avif)
  * @param {number} options.quality - 质量 (1-100)
  * @param {boolean} [options.lossless] - 无损编码（WebP/AVIF/TIFF；PNG 拉满压缩级别；JPEG 退回最高质量）
+ * @param {number} [options.maxSize] - 目标体积（字节），指定后二分搜索最高质量使产物 ≤ 该体积
  */
 export async function convertImage(inputPath, outputPath, options = {}) {
-  const { format, quality = 80, lossless = false } = options;
+  const { format, quality = 80, lossless = false, maxSize } = options;
   
   // 确保输出目录存在
   const outputDir = path.dirname(outputPath);
@@ -22,6 +24,21 @@ export async function convertImage(inputPath, outputPath, options = {}) {
   
   // 确定目标格式
   const targetFormat = format || path.extname(outputPath).toLowerCase().replace('.', '');
+  
+  // 目标体积优先：二分搜索最高质量使产物 ≤ maxSize
+  if (maxSize && maxSize > 0 && !lossless) {
+    const res = await compressImageMaxSize(inputPath, outputPath, { format: targetFormat, targetBytes: maxSize, lossless });
+    return {
+      input: inputPath,
+      output: outputPath,
+      format: targetFormat,
+      originalSize: res.originalSize,
+      compressedSize: res.compressedSize,
+      quality: res.quality,
+      metTarget: res.metTarget,
+      savedPercent: ((res.originalSize - res.compressedSize) / res.originalSize * 100).toFixed(1)
+    };
+  }
   
   let pipeline = sharp(inputPath);
   
@@ -66,7 +83,8 @@ export async function convertImage(inputPath, outputPath, options = {}) {
     format: targetFormat,
     originalSize,
     convertedSize,
-    savedPercent: ((originalSize - convertedSize) / originalSize * 100).toFixed(1)
+    savedPercent: ((originalSize - convertedSize) / originalSize * 100).toFixed(1),
+    losslessNote: losslessNoteFor(targetFormat, lossless)
   };
 }
 
