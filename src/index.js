@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
-import { compressImage, compressImageToWebp, compressImageToAvif, compressImageToFormat } from './compress.js';
+import { compressImage, compressImageToWebp, compressImageToAvif, compressImageToFormat, resizeImage, RESIZE_FITS, isEncodableFormat } from './compress.js';
 import { convertImage } from './convert.js';
 import { getImageInfo, glob, formatFileSize, batchProcess } from './utils.js';
 import { getConfig, setConfigValue, resetConfigValue, resetConfig, getConfigPath, hasConfigFile } from './config.js';
@@ -21,15 +21,17 @@ program
 program
   .option('-q, --quality <number>', 'Compression quality (1-100)')
   .option('-f, --format <type>', 'Target format for conversion (webp or avif, default: webp)')
+  .option('-j, --concurrency <number>', 'Concurrency for batch processing (default: 4)')
   .action(async (options) => {
     const spinner = ora('Scanning and processing images...').start();
     const config = getConfig();
     const quality = options.quality ?? config.quality;
     const targetFormat = options.format ?? 'webp';
+    const concurrency = parseConcurrency(options.concurrency);
     
     try {
       const currentDir = process.cwd();
-      const results = await processAllImages(currentDir, { quality, targetFormat });
+      const results = await processAllImages(currentDir, { quality, targetFormat, concurrency });
       
       spinner.succeed(chalk.green(`\n✓ Processing complete!`));
       console.log(chalk.cyan('\n📊 Summary:\n'));
@@ -142,6 +144,7 @@ program
   .option('--smart', 'Smart mode: content-aware format + adaptive quality (SSIM/Butteraugli)')
   .option('--metric <type>', 'Quality metric for smart mode: ssim (default) or butteraugli')
   .option('--threshold <number>', 'Quality threshold for smart mode (SSIM≥0.95 default, Butteraugli≤1.2 default)')
+  .option('-j, --concurrency <number>', 'Concurrency for directory processing (default: 4)')
   .action(async (source, output, options) => {
     const config = getConfig();
     
@@ -156,6 +159,7 @@ program
     const smart = options.smart || false;
     const metric = options.metric || 'ssim';
     const threshold = options.threshold ? parseFloat(options.threshold) : undefined;
+    const concurrency = parseConcurrency(options.concurrency);
     
     const spinner = ora('Processing...').start();
     
@@ -164,7 +168,7 @@ program
       
       if (stats.isDirectory()) {
         spinner.text = 'Processing directory...';
-        const results = await processDirectory(sourcePath, output, { quality, recursive, format, generateWebp, forceReplace, smart, metric, threshold }, spinner);
+        const results = await processDirectory(sourcePath, output, { quality, recursive, format, generateWebp, forceReplace, smart, metric, threshold, concurrency }, spinner);
         
         if (results.success === 0 && results.failed === 0 && results.skipped === 0) {
           spinner.stop();
@@ -252,6 +256,7 @@ function createFormatCommand(format) {
     const sourcePath = source || process.cwd();
     const quality = options.quality ?? (config.quality || defaultQuality);
     const recursive = options.recursive !== undefined ? options.recursive : true;
+    const concurrency = parseConcurrency(options.concurrency);
     
     // AVIF 质量提示
     if (format === 'avif' && quality > 70) {
@@ -265,7 +270,7 @@ function createFormatCommand(format) {
       
       if (stats.isDirectory()) {
         spinner.text = 'Processing directory...';
-        const results = await processDirectoryToFormat(sourcePath, output, format, { quality, recursive, force }, spinner);
+        const results = await processDirectoryToFormat(sourcePath, output, format, { quality, recursive, force, concurrency }, spinner);
         
         if (results.success === 0 && results.failed === 0 && results.skipped === 0) {
           spinner.stop();
@@ -313,6 +318,7 @@ program
   .argument('[output]', 'Output file or directory')
   .option('-q, --quality <number>', 'WebP quality (1-100, default: 80)')
   .option('-r, --recursive', 'Process directories recursively')
+  .option('-j, --concurrency <number>', 'Concurrency for directory processing (default: 4)')
   .option('--force', 'Overwrite existing target files')
   .action(createFormatCommand('webp'));
 
@@ -324,6 +330,7 @@ program
   .argument('[output]', 'Output file or directory')
   .option('-q, --quality <number>', 'AVIF quality (1-100, default: 65)')
   .option('-r, --recursive', 'Process directories recursively')
+  .option('-j, --concurrency <number>', 'Concurrency for directory processing (default: 4)')
   .option('--force', 'Overwrite existing target files')
   .action(createFormatCommand('avif'));
 
@@ -351,6 +358,109 @@ program
       console.log(chalk.gray(`  Original: ${formatFileSize(result.originalSize)}`));
       console.log(chalk.gray(`  Converted: ${formatFileSize(result.convertedSize)}`));
       console.log(chalk.green(`  Saved: ${result.savedPercent}%`));
+    } catch (error) {
+      spinner.fail(chalk.red(`\n✗ Error: ${error.message}`));
+    }
+  });
+
+// 调整尺寸命令
+program
+  .command('resize')
+  .description('Resize images, optionally re-encoding (default: current directory)')
+  .argument('[source]', 'Source image file or directory (default: current directory)')
+  .argument('[output]', 'Output file or directory')
+  .option('-w, --width <number>', 'Target width in pixels')
+  .option('--height <number>', `Target height in pixels (--height, -h is reserved for help)`)
+  .option('--fit <type>', `Fit mode: ${RESIZE_FITS.join(', ')} (default: inside)`)
+  .option('-q, --quality <number>', 'Re-encode quality (1-100, omit to keep the original encoder defaults)')
+  .option('-f, --format <type>', 'Output format (jpeg, png, webp, avif, tiff, gif)')
+  .option('-r, --recursive', 'Process directories recursively')
+  .option('-j, --concurrency <number>', 'Concurrency for directory processing (default: 4)')
+  .option('--force', 'Replace original files in place (only when dimensions actually change)')
+  .action(async (source, output, options) => {
+    const width = options.width ? parseInt(options.width, 10) : undefined;
+    const height = options.height ? parseInt(options.height, 10) : undefined;
+    const fit = options.fit || 'inside';
+    const format = options.format ? String(options.format).toLowerCase() : undefined;
+
+    const fail = (message) => {
+      console.log(chalk.red(`\n✗ ${message}\n`));
+      process.exitCode = 1;
+    };
+
+    if (!width && !height) return fail('Please specify --width and/or --height');
+    if ((width !== undefined && (!Number.isFinite(width) || width < 1)) ||
+        (height !== undefined && (!Number.isFinite(height) || height < 1))) {
+      return fail('Width and height must be positive integers');
+    }
+    if (!RESIZE_FITS.includes(fit)) {
+      return fail(`Invalid --fit "${fit}". Supported: ${RESIZE_FITS.join(', ')}`);
+    }
+    if (format && !isEncodableFormat(format)) {
+      return fail(`Unsupported --format "${options.format}". Supported: jpeg, png, webp, avif, tiff, gif`);
+    }
+    const quality = options.quality ? parseInt(options.quality, 10) : undefined;
+    if (quality !== undefined && (!Number.isFinite(quality) || quality < 1 || quality > 100)) {
+      return fail('Quality must be an integer between 1 and 100');
+    }
+
+    const config = getConfig();
+    const sourcePath = source || process.cwd();
+    const recursive = options.recursive !== undefined ? options.recursive : true;
+    const force = options.force || false;
+    const concurrency = parseConcurrency(options.concurrency);
+
+    const spinner = ora('Resizing...').start();
+
+    try {
+      const stats = fs.statSync(sourcePath);
+
+      if (stats.isDirectory()) {
+        spinner.text = 'Resizing directory...';
+        const results = await processDirectoryResize(
+          sourcePath,
+          output,
+          { width, height, fit, quality, format, recursive, force, concurrency },
+          spinner
+        );
+
+        if (results.success === 0 && results.failed === 0 && results.skipped === 0 && results.skippedNoop === 0) {
+          spinner.stop();
+          console.log(chalk.yellow(`\n⚠ No images found in ${sourcePath}`));
+          return;
+        }
+
+        spinner.succeed(chalk.green(`\n✓ Resized ${results.success} files`));
+        if (results.totalOriginalSize > 0) {
+          const savedPercent = ((results.totalOriginalSize - results.totalNewSize) / results.totalOriginalSize * 100).toFixed(1);
+          console.log(chalk.green(`  Total saved: ${savedPercent}% (${formatFileSize(results.totalOriginalSize - results.totalNewSize)})`));
+          console.log(chalk.gray(`  Original total: ${formatFileSize(results.totalOriginalSize)} → Resized total: ${formatFileSize(results.totalNewSize)}`));
+        }
+        if (results.skipped > 0) {
+          console.log(chalk.gray(`  Skipped: ${results.skipped} files`));
+        }
+        if (results.skippedNoop > 0) {
+          console.log(chalk.gray(`  Skipped (dimensions unchanged): ${results.skippedNoop} files`));
+        }
+        if (results.failed > 0) {
+          console.log(chalk.red(`✗ Failed: ${results.failed} files`));
+        }
+      } else {
+        const result = await resizeSingleFile(sourcePath, output, { width, height, fit, quality, format, force });
+        if (result.skipped) {
+          spinner.stop();
+          console.log(chalk.yellow(`\n⚠ Skipped: ${result.message}`));
+        } else if (result.success) {
+          spinner.succeed(chalk.green(`\n✓ Resized successfully!`));
+          console.log(chalk.gray(`  Dimensions: ${result.originalWidth}×${result.originalHeight} → ${result.width}×${result.height}`));
+          console.log(chalk.gray(`  Original: ${formatFileSize(result.originalSize)}`));
+          console.log(chalk.gray(`  Resized: ${formatFileSize(result.newSize)}`));
+          console.log(chalk.green(`  Saved: ${result.savedPercent}`));
+          console.log(chalk.cyan(`  Output: ${result.output}`));
+        } else {
+          spinner.fail(chalk.red(`\n✗ ${result.error}`));
+        }
+      }
     } catch (error) {
       spinner.fail(chalk.red(`\n✗ Error: ${error.message}`));
     }
@@ -395,6 +505,17 @@ program
       process.exit(1);
     }
   });
+
+/**
+ * 解析并发数（默认 4，范围 1-32）
+ * @param {string|number} value - 命令行传入的并发数
+ * @returns {number} 归一化后的并发数
+ */
+function parseConcurrency(value) {
+  const parsed = parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return 4;
+  return Math.min(parsed, 32);
+}
 
 // 批量处理函数 - 处理所有图片，支持并发
 async function processAllImages(sourceDir, options = {}) {
@@ -486,7 +607,7 @@ function generateUniqueOutputPath(originalPath, targetExt, processedFiles) {
 }
 
 async function processDirectory(sourceDir, outputDir, options, spinner) {
-  const { quality, recursive, format, generateWebp, forceReplace, smart, metric, threshold } = options;
+  const { quality, recursive, format, generateWebp, forceReplace, smart, metric, threshold, concurrency = 4 } = options;
   const pattern = recursive 
     ? `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,tif,bmp,svg,avif}`
     : `${sourceDir}/*.{jpg,jpeg,png,gif,tiff,tif,bmp,svg,avif}`;
@@ -497,11 +618,17 @@ async function processDirectory(sourceDir, outputDir, options, spinner) {
   const results = { success: 0, failed: 0, webpGenerated: 0, skipped: 0, skippedLarger: 0 };
   const total = filteredFiles.length;
   
-  for (let i = 0; i < filteredFiles.length; i++) {
-    const file = filteredFiles[i];
-    if (spinner) {
-      spinner.text = `Processing [${i + 1}/${total}] ${path.basename(file)}`;
-    }
+  // 并发下多个源文件可能映射到同一输出路径（如 photo.jpg / photo.png 都指向 photo.webp），
+  // 用集合认领路径，避免并发写同一个文件
+  const claimedOutputs = new Set();
+  const claim = (targetPath) => {
+    if (claimedOutputs.has(targetPath)) return false;
+    claimedOutputs.add(targetPath);
+    return true;
+  };
+  
+  // 单文件处理（顺序 / 并发两种驱动方式共用同一实现）
+  const processOneFile = async (file) => {
     try {
       const relativePath = path.relative(sourceDir, file);
       const ext = path.extname(file);
@@ -516,7 +643,7 @@ async function processDirectory(sourceDir, outputDir, options, spinner) {
         if (fs.existsSync(outputPath)) {
           console.log(chalk.gray(`  Skip (exists): ${file}`));
           results.skipped++;
-          continue;
+          return;
         }
       } else if (!forceReplace) {
         // 非强制替换模式，检查压缩文件和 webp 是否存在
@@ -524,7 +651,7 @@ async function processDirectory(sourceDir, outputDir, options, spinner) {
         if (fs.existsSync(compressedPath)) {
           console.log(chalk.gray(`  Skip (compressed): ${file}`));
           results.skipped++;
-          continue;
+          return;
         }
         
         if (generateWebp) {
@@ -532,7 +659,7 @@ async function processDirectory(sourceDir, outputDir, options, spinner) {
           if (fs.existsSync(webpPath)) {
             console.log(chalk.gray(`  Skip (WebP exists): ${file}`));
             results.skipped++;
-            continue;
+            return;
           }
         }
       } else if (generateWebp) {
@@ -541,7 +668,7 @@ async function processDirectory(sourceDir, outputDir, options, spinner) {
         if (fs.existsSync(webpPath)) {
           console.log(chalk.gray(`  Skip (WebP exists): ${file}`));
           results.skipped++;
-          continue;
+          return;
         }
       }
       
@@ -570,9 +697,19 @@ async function processDirectory(sourceDir, outputDir, options, spinner) {
           : forceReplace
             ? path.join(dirName, `${baseName}_imgmin_tmp${outExt}`)
             : path.join(dirName, `${baseName}_compressed${outExt}`);
+        if (!claim(outputPath)) {
+          console.log(chalk.gray(`  Skip (duplicate output): ${file}`));
+          results.skipped++;
+          return;
+        }
         await compressImage(file, outputPath, { quality: sugg.quality, format: sugg.format });
         console.log(chalk.cyan(`  🧠 ${path.basename(file)} → ${sugg.format} Q${sugg.quality} (${sugg.reason})`));
       } else {
+        if (!claim(outputPath)) {
+          console.log(chalk.gray(`  Skip (duplicate output): ${file}`));
+          results.skipped++;
+          return;
+        }
         await compressImage(file, outputPath, {
           quality: parseInt(quality),
           format: format || undefined
@@ -589,7 +726,7 @@ async function processDirectory(sourceDir, outputDir, options, spinner) {
           fs.unlinkSync(outputPath);
           console.log(chalk.gray(`  Skip (larger): ${file} (${originalSize} → ${compressedSize})`));
           results.skippedLarger++;
-          continue;
+          return;
         }
       }
       
@@ -604,7 +741,7 @@ async function processDirectory(sourceDir, outputDir, options, spinner) {
           console.log(chalk.gray(`  Skip (larger): ${file} (${originalSize} → ${compressedSize})`));
           results.skippedLarger++;
           results.success++;
-          continue;
+          return;
         }
         
         const targetExt = format ? `.${format}` : ext;
@@ -620,6 +757,10 @@ async function processDirectory(sourceDir, outputDir, options, spinner) {
       if (generateWebp) {
         try {
           const webpPath = path.join(dirName, `${baseName}.webp`);
+          if (!claim(webpPath)) {
+            console.log(chalk.gray(`  Skip WebP (duplicate output): ${file}`));
+            return;
+          }
           // 读取源文件用于 webp 转换（forceReplace 下源文件可能已被替换）
           await compressImageToWebp(forceReplace ? outputPath : file, webpPath, parseInt(quality));
           results.webpGenerated++;
@@ -630,6 +771,24 @@ async function processDirectory(sourceDir, outputDir, options, spinner) {
     } catch (error) {
       console.log(chalk.yellow(`\n⚠ Failed: ${file} - ${error.message}`));
       results.failed++;
+    }
+  };
+  
+  if (concurrency <= 1) {
+    for (let i = 0; i < filteredFiles.length; i++) {
+      const file = filteredFiles[i];
+      if (spinner) {
+        spinner.text = `Processing [${i + 1}/${total}] ${path.basename(file)}`;
+      }
+      await processOneFile(file);
+    }
+  } else {
+    for (let i = 0; i < filteredFiles.length; i += concurrency) {
+      const batch = filteredFiles.slice(i, i + concurrency);
+      if (spinner) {
+        spinner.text = `Processing [${Math.min(i + concurrency, total)}/${total}]...`;
+      }
+      await batchProcess(batch, processOneFile, { parallel: true, concurrency });
     }
   }
   
@@ -704,6 +863,171 @@ async function processDirectoryToFormat(sourceDir, outputDir, format, options, s
     }
   }
   
+  return results;
+}
+
+/**
+ * 尺寸调整 - 单文件
+ * - 未指定 output 且未 --force：输出 `<name>_resized.<ext>`
+ * - --force：尺寸真正变化时原地替换原图
+ * - 尺寸未变化（原图已小于目标且未允许放大）：删除产物，保留原图
+ */
+async function resizeSingleFile(source, output, options) {
+  const { width, height, fit, quality, format, force = false } = options;
+  const stats = fs.statSync(source);
+  const ext = path.extname(source);
+  const baseName = path.basename(source, ext);
+  const dirName = path.dirname(source);
+  const outExt = format ? `.${format}` : ext;
+
+  let finalOutput;
+  if (output) {
+    finalOutput = output;
+  } else if (force) {
+    finalOutput = path.join(dirName, `${baseName}_imgmin_tmp${outExt}`);
+  } else {
+    finalOutput = path.join(dirName, `${baseName}_resized${outExt}`);
+    if (fs.existsSync(finalOutput)) {
+      return { success: true, skipped: true, message: `Resized file already exists: ${finalOutput}` };
+    }
+  }
+
+  const result = await resizeImage(source, finalOutput, { width, height, fit, quality, format });
+
+  if (!result.resized && !output) {
+    fs.unlinkSync(finalOutput);
+    return {
+      success: true,
+      skipped: true,
+      message: `Dimensions unchanged (${result.originalWidth}×${result.originalHeight}), kept original`
+    };
+  }
+
+  if (force && !output) {
+    const originalPath = path.join(dirName, `${baseName}${outExt}`);
+    fs.unlinkSync(source);
+    fs.renameSync(finalOutput, originalPath);
+    finalOutput = originalPath;
+  }
+
+  const savedPercent = ((stats.size - result.newSize) / stats.size * 100).toFixed(1);
+
+  return {
+    success: true,
+    originalSize: stats.size,
+    newSize: result.newSize,
+    savedPercent: `${savedPercent}%`,
+    originalWidth: result.originalWidth,
+    originalHeight: result.originalHeight,
+    width: result.width,
+    height: result.height,
+    output: finalOutput
+  };
+}
+
+/**
+ * 尺寸调整 - 目录批量，支持并发
+ */
+async function processDirectoryResize(sourceDir, outputDir, options, spinner) {
+  const { width, height, fit, quality, format, recursive, force = false, concurrency = 4 } = options;
+  const inputExts = 'jpg,jpeg,png,gif,webp,tiff,tif,bmp,svg,avif';
+  const pattern = recursive
+    ? `${sourceDir}/**/*.{${inputExts}}`
+    : `${sourceDir}/*.{${inputExts}}`;
+
+  const files = await glob(pattern, { nodir: true });
+  // 排除自身产物，避免把上次的结果再缩一遍
+  const filteredFiles = files.filter(f => {
+    const name = path.basename(f);
+    return !name.includes('_compressed') && !/_resized\.[^.]+$/i.test(name);
+  });
+
+  const results = { success: 0, failed: 0, skipped: 0, skippedNoop: 0, totalOriginalSize: 0, totalNewSize: 0 };
+  const total = filteredFiles.length;
+  const claimedOutputs = new Set();
+
+  const processOneFile = async (file) => {
+    try {
+      const originalSize = fs.statSync(file).size;
+      const ext = path.extname(file);
+      const baseName = path.basename(file, ext);
+      const dirName = path.dirname(file);
+      const relativePath = path.relative(sourceDir, file);
+      const outExt = format ? `.${format}` : ext;
+
+      let outputPath;
+      if (outputDir) {
+        outputPath = path.join(outputDir, relativePath.replace(/\.[^.]+$/, outExt));
+        const outDirPath = path.dirname(outputPath);
+        if (!fs.existsSync(outDirPath)) {
+          fs.mkdirSync(outDirPath, { recursive: true });
+        }
+        if (!force && fs.existsSync(outputPath)) {
+          console.log(chalk.gray(`  Skip (exists): ${file}`));
+          results.skipped++;
+          return;
+        }
+      } else if (force) {
+        outputPath = path.join(dirName, `${baseName}_imgmin_tmp${outExt}`);
+      } else {
+        outputPath = path.join(dirName, `${baseName}_resized${outExt}`);
+        if (fs.existsSync(outputPath)) {
+          console.log(chalk.gray(`  Skip (exists): ${file}`));
+          results.skipped++;
+          return;
+        }
+      }
+
+      if (claimedOutputs.has(outputPath)) {
+        console.log(chalk.gray(`  Skip (duplicate output): ${file}`));
+        results.skipped++;
+        return;
+      }
+      claimedOutputs.add(outputPath);
+
+      const result = await resizeImage(file, outputPath, { width, height, fit, quality, format });
+
+      // 尺寸未变化：原地模式不写回，输出目录模式保留副本
+      if (!result.resized && !outputDir) {
+        fs.unlinkSync(outputPath);
+        console.log(chalk.gray(`  Skip (unchanged): ${file} (${result.originalWidth}×${result.originalHeight})`));
+        results.skippedNoop++;
+        return;
+      }
+
+      if (force && !outputDir) {
+        const finalPath = path.join(dirName, `${baseName}${outExt}`);
+        fs.unlinkSync(file);
+        fs.renameSync(outputPath, finalPath);
+        outputPath = finalPath;
+      }
+
+      results.totalOriginalSize += originalSize;
+      results.totalNewSize += fs.statSync(outputPath).size;
+      results.success++;
+    } catch (error) {
+      console.log(chalk.yellow(`\n⚠ Failed: ${file} - ${error.message}`));
+      results.failed++;
+    }
+  };
+
+  if (concurrency <= 1) {
+    for (let i = 0; i < filteredFiles.length; i++) {
+      if (spinner) {
+        spinner.text = `Resizing [${i + 1}/${total}] ${path.basename(filteredFiles[i])}`;
+      }
+      await processOneFile(filteredFiles[i]);
+    }
+  } else {
+    for (let i = 0; i < filteredFiles.length; i += concurrency) {
+      const batch = filteredFiles.slice(i, i + concurrency);
+      if (spinner) {
+        spinner.text = `Resizing [${Math.min(i + concurrency, total)}/${total}]...`;
+      }
+      await batchProcess(batch, processOneFile, { parallel: true, concurrency });
+    }
+  }
+
   return results;
 }
 
