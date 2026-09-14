@@ -252,8 +252,13 @@ imgmin ui -p 8080          # 自定义端口
 - 拖拽或点击上传图片
 - 格式和质量实时切换
 - 压缩后即时显示节省百分比和大小
+- 单图自动分析压缩潜力（含建议质量），已选文件可逐项删除
 - 图片缩略图预览
 - AVIF 高质量自动提醒
+
+<p align="center">
+  <img src="screenshots/shot.png" alt="imgmin Web UI 演示" style="max-width:900px;width:100%;border-radius:10px;border:1px solid #2a2a35">
+</p>
 
 ## 支持格式
 
