@@ -24,25 +24,27 @@ export function isEncodableFormat(format) {
  * @param {number} quality - 质量 (1-100)
  * @returns {import('sharp').Sharp} 套用编码参数后的 pipeline
  */
-export function applyEncoder(pipeline, format, quality = 80) {
+export function applyEncoder(pipeline, format, quality = 80, { lossless = false } = {}) {
   const numeric = Number(quality);
   const q = Number.isFinite(numeric) ? Math.min(100, Math.max(1, Math.round(numeric))) : 80;
   
   switch (String(format || '').toLowerCase()) {
     case 'jpeg':
     case 'jpg':
-      return pipeline.jpeg({ quality: q, mozjpeg: true });
+      // JPEG 不支持无损，lossless 时退回最高质量
+      return pipeline.jpeg({ quality: lossless ? 100 : q, mozjpeg: true });
     case 'png':
+      // PNG 本身无损；lossless 时拉满压缩级别
       return pipeline.png({
-        compressionLevel: Math.floor((100 - q) / 10),
+        compressionLevel: lossless ? 9 : Math.floor((100 - q) / 10),
         palette: q < 80
       });
     case 'webp':
-      return pipeline.webp({ quality: q });
+      return pipeline.webp(lossless ? { lossless: true } : { quality: q });
     case 'avif':
-      return pipeline.avif({ quality: q });
+      return pipeline.avif(lossless ? { lossless: true } : { quality: q });
     case 'tiff':
-      return pipeline.tiff({ quality: q });
+      return pipeline.tiff(lossless ? { lossless: true, quality: q } : { quality: q });
     case 'gif':
       return pipeline.gif();
     default:
@@ -60,7 +62,7 @@ export function applyEncoder(pipeline, format, quality = 80) {
  * @param {string} options.format - 输出格式 (jpeg, png, webp, avif)
  */
 export async function compressImage(inputPath, outputPath, options = {}) {
-  const { quality = 80, format } = options;
+  const { quality = 80, format, lossless = false } = options;
   
   // 确保输出目录存在
   const outputDir = path.dirname(outputPath);
@@ -71,7 +73,7 @@ export async function compressImage(inputPath, outputPath, options = {}) {
   // 根据格式或自动检测设置输出格式
   const targetFormat = format || path.extname(outputPath).toLowerCase().replace('.', '') || 'jpeg';
   
-  const pipeline = applyEncoder(sharp(inputPath), targetFormat, quality);
+  const pipeline = applyEncoder(sharp(inputPath), targetFormat, quality, { lossless });
   
   await pipeline.toFile(outputPath);
   
@@ -89,7 +91,7 @@ export async function compressImage(inputPath, outputPath, options = {}) {
  * @param {string} outputPath - 输出文件路径
  * @param {number} quality - 质量 (1-100)
  */
-export async function compressImageToWebp(inputPath, outputPath, quality = 80) {
+export async function compressImageToWebp(inputPath, outputPath, quality = 80, lossless = false) {
   // 确保输出目录存在
   const outputDir = path.dirname(outputPath);
   if (!fs.existsSync(outputDir)) {
@@ -102,7 +104,7 @@ export async function compressImageToWebp(inputPath, outputPath, quality = 80) {
   }
   
   await sharp(inputPath)
-    .webp({ quality: Math.min(100, Math.max(1, quality)) })
+    .webp(lossless ? { lossless: true } : { quality: Math.min(100, Math.max(1, quality)) })
     .toFile(outputPath);
   
   return {
@@ -128,6 +130,7 @@ export const RESIZE_FITS = ['cover', 'contain', 'fill', 'inside', 'outside'];
  * @param {string} options.fit - 适应方式 (cover, contain, fill, inside, outside)
  * @param {number} [options.quality] - 重编码质量 (1-100)，省略则沿用 sharp 默认编码
  * @param {string} [options.format] - 输出格式，省略则按输出文件扩展名推断
+ * @param {boolean} [options.lossless] - 无损重编码（WebP/AVIF/TIFF）
  * @param {boolean} [options.withoutEnlargement] - 是否禁止放大（默认 true）
  */
 export async function resizeImage(inputPath, outputPath, options = {}) {
@@ -137,6 +140,7 @@ export async function resizeImage(inputPath, outputPath, options = {}) {
     fit = 'inside',
     quality,
     format,
+    lossless = false,
     withoutEnlargement = true
   } = options;
   
@@ -172,7 +176,7 @@ export async function resizeImage(inputPath, outputPath, options = {}) {
   // 指定 quality 时显式套用编码参数，否则沿用 sharp 对扩展名的默认推断
   if (quality !== undefined && quality !== null) {
     const targetFormat = format || path.extname(outputPath).toLowerCase().replace('.', '');
-    pipeline = applyEncoder(pipeline, targetFormat, quality);
+    pipeline = applyEncoder(pipeline, targetFormat, quality, { lossless });
   }
   
   await pipeline.toFile(outputPath);
@@ -199,7 +203,7 @@ export async function resizeImage(inputPath, outputPath, options = {}) {
  * @param {string} outputPath - 输出文件路径
  * @param {number} quality - 质量 (1-100)
  */
-export async function compressImageToAvif(inputPath, outputPath, quality = 80) {
+export async function compressImageToAvif(inputPath, outputPath, quality = 80, lossless = false) {
   // 确保输出目录存在
   const outputDir = path.dirname(outputPath);
   if (!fs.existsSync(outputDir)) {
@@ -212,7 +216,7 @@ export async function compressImageToAvif(inputPath, outputPath, quality = 80) {
   }
   
   await sharp(inputPath)
-    .avif({ quality: Math.min(100, Math.max(1, quality)) })
+    .avif(lossless ? { lossless: true } : { quality: Math.min(100, Math.max(1, quality)) })
     .toFile(outputPath);
   
   return {
@@ -230,10 +234,10 @@ export async function compressImageToAvif(inputPath, outputPath, quality = 80) {
  * @param {string} format - 目标格式 (webp, avif)
  * @param {number} quality - 质量 (1-100)
  */
-export async function compressImageToFormat(inputPath, outputPath, format, quality = 80) {
+export async function compressImageToFormat(inputPath, outputPath, format, quality = 80, lossless = false) {
   const formatMap = {
-    webp: compressImageToWebp,
-    avif: compressImageToAvif
+    webp: (i, o, q) => compressImageToWebp(i, o, q, lossless),
+    avif: (i, o, q) => compressImageToAvif(i, o, q, lossless)
   };
   
   const handler = formatMap[format];

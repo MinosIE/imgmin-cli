@@ -22,16 +22,18 @@ program
   .option('-q, --quality <number>', 'Compression quality (1-100)')
   .option('-f, --format <type>', 'Target format for conversion (webp or avif, default: webp)')
   .option('-j, --concurrency <number>', 'Concurrency for batch processing (default: 4)')
+  .option('--lossless', 'Lossless encoding for WebP/AVIF/TIFF (PNG max compression; JPEG falls back to highest quality)')
   .action(async (options) => {
     const spinner = ora('Scanning and processing images...').start();
     const config = getConfig();
     const quality = options.quality ?? config.quality;
     const targetFormat = options.format ?? 'webp';
     const concurrency = parseConcurrency(options.concurrency);
+    const lossless = options.lossless || false;
     
     try {
       const currentDir = process.cwd();
-      const results = await processAllImages(currentDir, { quality, targetFormat, concurrency });
+      const results = await processAllImages(currentDir, { quality, targetFormat, concurrency, lossless });
       
       spinner.succeed(chalk.green(`\n✓ Processing complete!`));
       console.log(chalk.cyan('\n📊 Summary:\n'));
@@ -145,6 +147,7 @@ program
   .option('--metric <type>', 'Quality metric for smart mode: ssim (default) or butteraugli')
   .option('--threshold <number>', 'Quality threshold for smart mode (SSIM≥0.95 default, Butteraugli≤1.2 default)')
   .option('-j, --concurrency <number>', 'Concurrency for directory processing (default: 4)')
+  .option('--lossless', 'Lossless encoding for WebP/AVIF/TIFF (PNG max compression; JPEG falls back to highest quality)')
   .action(async (source, output, options) => {
     const config = getConfig();
     
@@ -160,6 +163,7 @@ program
     const metric = options.metric || 'ssim';
     const threshold = options.threshold ? parseFloat(options.threshold) : undefined;
     const concurrency = parseConcurrency(options.concurrency);
+    const lossless = options.lossless || false;
     
     const spinner = ora('Processing...').start();
     
@@ -168,7 +172,7 @@ program
       
       if (stats.isDirectory()) {
         spinner.text = 'Processing directory...';
-        const results = await processDirectory(sourcePath, output, { quality, recursive, format, generateWebp, forceReplace, smart, metric, threshold, concurrency }, spinner);
+        const results = await processDirectory(sourcePath, output, { quality, recursive, format, generateWebp, forceReplace, smart, metric, threshold, concurrency, lossless }, spinner);
         
         if (results.success === 0 && results.failed === 0 && results.skipped === 0) {
           spinner.stop();
@@ -190,7 +194,7 @@ program
           console.log(chalk.red(`✗ Failed: ${results.failed} files`));
         }
       } else {
-        const result = await compressSingleFile(sourcePath, output, { quality, format, generateWebp, forceReplace, smart, metric, threshold });
+        const result = await compressSingleFile(sourcePath, output, { quality, format, generateWebp, forceReplace, smart, metric, threshold, lossless });
         if (result.skipped) {
           spinner.stop();
           console.log(chalk.yellow(`\n⚠ Skipped: ${result.message}`));
@@ -252,6 +256,7 @@ function createFormatCommand(format) {
     const spinner = ora(`Converting to ${formatUpper}...`).start();
     const config = getConfig();
     const force = options.force || false;
+    const lossless = options.lossless || false;
     
     const sourcePath = source || process.cwd();
     const quality = options.quality ?? (config.quality || defaultQuality);
@@ -270,7 +275,7 @@ function createFormatCommand(format) {
       
       if (stats.isDirectory()) {
         spinner.text = 'Processing directory...';
-        const results = await processDirectoryToFormat(sourcePath, output, format, { quality, recursive, force, concurrency }, spinner);
+        const results = await processDirectoryToFormat(sourcePath, output, format, { quality, recursive, force, concurrency, lossless }, spinner);
         
         if (results.success === 0 && results.failed === 0 && results.skipped === 0) {
           spinner.stop();
@@ -291,7 +296,7 @@ function createFormatCommand(format) {
           console.log(chalk.red(`✗ Failed: ${results.failed} files`));
         }
       } else {
-        const result = await convertToFormatSingle(sourcePath, output, format, { quality, force });
+        const result = await convertToFormatSingle(sourcePath, output, format, { quality, force, lossless });
         if (result.skipped) {
           spinner.stop();
           console.log(chalk.yellow(`\n⚠ Skipped: ${result.message}`));
@@ -320,6 +325,7 @@ program
   .option('-r, --recursive', 'Process directories recursively')
   .option('-j, --concurrency <number>', 'Concurrency for directory processing (default: 4)')
   .option('--force', 'Overwrite existing target files')
+  .option('--lossless', 'Lossless WebP/AVIF encoding')
   .action(createFormatCommand('webp'));
 
 // 转换为 AVIF 命令
@@ -332,6 +338,7 @@ program
   .option('-r, --recursive', 'Process directories recursively')
   .option('-j, --concurrency <number>', 'Concurrency for directory processing (default: 4)')
   .option('--force', 'Overwrite existing target files')
+  .option('--lossless', 'Lossless AVIF encoding')
   .action(createFormatCommand('avif'));
 
 // 格式转换命令
@@ -341,17 +348,20 @@ program
   .argument('<source>', 'Source image file')
   .argument('<output>', 'Output file path')
   .option('-q, --quality <number>', 'Quality (1-100)')
+  .option('--lossless', 'Lossless encoding for WebP/AVIF/TIFF (PNG max compression; JPEG falls back to highest quality)')
   .action(async (source, output, options) => {
     const spinner = ora('Converting...').start();
     const config = getConfig();
     
     const quality = options.quality ?? config.quality;
+    const lossless = options.lossless || false;
     
     try {
       const ext = path.extname(output).toLowerCase().replace('.', '');
       const result = await convertImage(source, output, { 
         format: ext,
-        quality: parseInt(quality)
+        quality: parseInt(quality),
+        lossless
       });
       
       spinner.succeed(chalk.green(`\n✓ Converted successfully!`));
@@ -377,11 +387,13 @@ program
   .option('-r, --recursive', 'Process directories recursively')
   .option('-j, --concurrency <number>', 'Concurrency for directory processing (default: 4)')
   .option('--force', 'Replace original files in place (only when dimensions actually change)')
+  .option('--lossless', 'Lossless re-encoding for WebP/AVIF/TIFF when re-encoding')
   .action(async (source, output, options) => {
     const width = options.width ? parseInt(options.width, 10) : undefined;
     const height = options.height ? parseInt(options.height, 10) : undefined;
     const fit = options.fit || 'inside';
     const format = options.format ? String(options.format).toLowerCase() : undefined;
+    const lossless = options.lossless || false;
 
     const fail = (message) => {
       console.log(chalk.red(`\n✗ ${message}\n`));
@@ -420,7 +432,7 @@ program
         const results = await processDirectoryResize(
           sourcePath,
           output,
-          { width, height, fit, quality, format, recursive, force, concurrency },
+          { width, height, fit, quality, format, recursive, force, concurrency, lossless },
           spinner
         );
 
@@ -446,7 +458,7 @@ program
           console.log(chalk.red(`✗ Failed: ${results.failed} files`));
         }
       } else {
-        const result = await resizeSingleFile(sourcePath, output, { width, height, fit, quality, format, force });
+        const result = await resizeSingleFile(sourcePath, output, { width, height, fit, quality, format, force, lossless });
         if (result.skipped) {
           spinner.stop();
           console.log(chalk.yellow(`\n⚠ Skipped: ${result.message}`));
@@ -519,7 +531,7 @@ function parseConcurrency(value) {
 
 // 批量处理函数 - 处理所有图片，支持并发
 async function processAllImages(sourceDir, options = {}) {
-  const { quality = 80, targetFormat = 'webp', concurrency = 4 } = options;
+  const { quality = 80, targetFormat = 'webp', concurrency = 4, lossless = false } = options;
   const pattern = `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,tif,bmp,svg,avif,webp}`;
   const files = await glob(pattern, { nodir: true });
   
@@ -551,13 +563,13 @@ async function processAllImages(sourceDir, options = {}) {
     const outputPath = generateUniqueOutputPath(file, targetExt, processedFiles);
     
     if (isAlreadyWebp) {
-      await compressImageToFormat(file, outputPath, 'webp', quality);
+      await compressImageToFormat(file, outputPath, 'webp', quality, lossless);
       results.webpOptimized++;
     } else if (isAlreadyAvif) {
-      await compressImageToFormat(file, outputPath, 'avif', quality);
+      await compressImageToFormat(file, outputPath, 'avif', quality, lossless);
       results.avifOptimized++;
     } else {
-      await compressImageToFormat(file, outputPath, targetFormat, quality);
+      await compressImageToFormat(file, outputPath, targetFormat, quality, lossless);
       results.converted++;
     }
     
@@ -607,7 +619,7 @@ function generateUniqueOutputPath(originalPath, targetExt, processedFiles) {
 }
 
 async function processDirectory(sourceDir, outputDir, options, spinner) {
-  const { quality, recursive, format, generateWebp, forceReplace, smart, metric, threshold, concurrency = 4 } = options;
+  const { quality, recursive, format, generateWebp, forceReplace, smart, metric, threshold, concurrency = 4, lossless = false } = options;
   const pattern = recursive 
     ? `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,tif,bmp,svg,avif}`
     : `${sourceDir}/*.{jpg,jpeg,png,gif,tiff,tif,bmp,svg,avif}`;
@@ -702,7 +714,7 @@ async function processDirectory(sourceDir, outputDir, options, spinner) {
           results.skipped++;
           return;
         }
-        await compressImage(file, outputPath, { quality: sugg.quality, format: sugg.format });
+        await compressImage(file, outputPath, { quality: sugg.quality, format: sugg.format, lossless });
         console.log(chalk.cyan(`  🧠 ${path.basename(file)} → ${sugg.format} Q${sugg.quality} (${sugg.reason})`));
       } else {
         if (!claim(outputPath)) {
@@ -712,7 +724,8 @@ async function processDirectory(sourceDir, outputDir, options, spinner) {
         }
         await compressImage(file, outputPath, {
           quality: parseInt(quality),
-          format: format || undefined
+          format: format || undefined,
+          lossless
         });
       }
       
@@ -762,7 +775,7 @@ async function processDirectory(sourceDir, outputDir, options, spinner) {
             return;
           }
           // 读取源文件用于 webp 转换（forceReplace 下源文件可能已被替换）
-          await compressImageToWebp(forceReplace ? outputPath : file, webpPath, parseInt(quality));
+          await compressImageToWebp(forceReplace ? outputPath : file, webpPath, parseInt(quality), lossless);
           results.webpGenerated++;
         } catch (webpError) {
           console.log(chalk.yellow(`\n⚠ WebP skipped: ${file} - ${webpError.message}`));
@@ -797,7 +810,7 @@ async function processDirectory(sourceDir, outputDir, options, spinner) {
 
 // 通用批量转换函数 - 将图片转换为指定格式，支持并发和强制覆盖
 async function processDirectoryToFormat(sourceDir, outputDir, format, options, spinner) {
-  const { quality, recursive, force = false, concurrency = 4 } = options;
+  const { quality, recursive, force = false, concurrency = 4, lossless = false } = options;
   const formatExt = `.${format}`;
   const formatUpper = format.toUpperCase();
   const inputExts = 'jpg,jpeg,png,gif,tiff,tif,bmp,svg,avif';
@@ -837,7 +850,7 @@ async function processDirectoryToFormat(sourceDir, outputDir, format, options, s
       }
     }
     
-    await compressImageToFormat(file, outputPath, format, parseInt(quality));
+    await compressImageToFormat(file, outputPath, format, parseInt(quality), lossless);
     
     const originalSize = fs.statSync(file).size;
     const convertedSize = fs.statSync(outputPath).size;
@@ -873,7 +886,7 @@ async function processDirectoryToFormat(sourceDir, outputDir, format, options, s
  * - 尺寸未变化（原图已小于目标且未允许放大）：删除产物，保留原图
  */
 async function resizeSingleFile(source, output, options) {
-  const { width, height, fit, quality, format, force = false } = options;
+  const { width, height, fit, quality, format, force = false, lossless = false } = options;
   const stats = fs.statSync(source);
   const ext = path.extname(source);
   const baseName = path.basename(source, ext);
@@ -892,7 +905,7 @@ async function resizeSingleFile(source, output, options) {
     }
   }
 
-  const result = await resizeImage(source, finalOutput, { width, height, fit, quality, format });
+  const result = await resizeImage(source, finalOutput, { width, height, fit, quality, format, lossless });
 
   if (!result.resized && !output) {
     fs.unlinkSync(finalOutput);
@@ -929,7 +942,7 @@ async function resizeSingleFile(source, output, options) {
  * 尺寸调整 - 目录批量，支持并发
  */
 async function processDirectoryResize(sourceDir, outputDir, options, spinner) {
-  const { width, height, fit, quality, format, recursive, force = false, concurrency = 4 } = options;
+  const { width, height, fit, quality, format, recursive, force = false, concurrency = 4, lossless = false } = options;
   const inputExts = 'jpg,jpeg,png,gif,webp,tiff,tif,bmp,svg,avif';
   const pattern = recursive
     ? `${sourceDir}/**/*.{${inputExts}}`
@@ -985,7 +998,7 @@ async function processDirectoryResize(sourceDir, outputDir, options, spinner) {
       }
       claimedOutputs.add(outputPath);
 
-      const result = await resizeImage(file, outputPath, { width, height, fit, quality, format });
+      const result = await resizeImage(file, outputPath, { width, height, fit, quality, format, lossless });
 
       // 尺寸未变化：原地模式不写回，输出目录模式保留副本
       if (!result.resized && !outputDir) {
@@ -1033,7 +1046,7 @@ async function processDirectoryResize(sourceDir, outputDir, options, spinner) {
 
 async function compressSingleFile(source, output, options) {
   const stats = fs.statSync(source);
-  const { quality, format, generateWebp, forceReplace, smart, metric, threshold } = options;
+  const { quality, format, generateWebp, forceReplace, smart, metric, threshold, lossless = false } = options;
   const ext = path.extname(source);
   const baseName = path.basename(source, ext);
   const dirName = path.dirname(source);
@@ -1046,7 +1059,7 @@ async function compressSingleFile(source, output, options) {
     const outExt = output ? path.extname(output) : `.${targetFormat}`;
     let smartOutput = output || path.join(dirName, `${baseName}_compressed${outExt}`);
 
-    await compressImage(source, smartOutput, { quality: targetQuality, format: targetFormat });
+    await compressImage(source, smartOutput, { quality: targetQuality, format: targetFormat, lossless });
 
     const cs = fs.statSync(smartOutput).size;
     const saved = ((stats.size - cs) / stats.size * 100).toFixed(1);
@@ -1099,7 +1112,8 @@ async function compressSingleFile(source, output, options) {
   
   await compressImage(source, finalOutput, {
     quality: parseInt(quality),
-    format: format || undefined
+    format: format || undefined,
+    lossless
   });
   
   const compressedSize = fs.statSync(finalOutput).size;
@@ -1150,7 +1164,7 @@ async function compressSingleFile(source, output, options) {
     try {
       const webpPath = path.join(dirName, `${baseName}.webp`);
       
-      await compressImageToWebp(forceReplace ? finalOutput : source, webpPath, parseInt(quality));
+      await compressImageToWebp(forceReplace ? finalOutput : source, webpPath, parseInt(quality), lossless);
       result.webpPath = webpPath;
     } catch (webpError) {
       console.log(chalk.yellow(`\n⚠ WebP skipped: ${source} - ${webpError.message}`));
@@ -1163,7 +1177,7 @@ async function compressSingleFile(source, output, options) {
 // 通用单文件转换函数 - 将单个图片转换为指定格式（webp 或 avif）
 async function convertToFormatSingle(source, output, format, options) {
   const stats = fs.statSync(source);
-  const { quality, force = false } = options;
+  const { quality, force = false, lossless = false } = options;
   const baseName = path.basename(source, path.extname(source));
   const dirName = path.dirname(source);
   const formatExt = `.${format}`;
@@ -1178,7 +1192,7 @@ async function convertToFormatSingle(source, output, format, options) {
     return { success: true, skipped: true, message: `${formatUpper} file already exists (use --force to overwrite)` };
   }
   
-  await compressImageToFormat(source, output, format, parseInt(quality));
+  await compressImageToFormat(source, output, format, parseInt(quality), lossless);
   
   const originalSize = stats.size;
   const convertedSize = fs.statSync(output).size;

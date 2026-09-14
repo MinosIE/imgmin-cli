@@ -286,7 +286,7 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 | 高 | `imgmin resize` 子命令 | `resizeImage` 已实现且导出，但 CLI 无入口 | **已完成** | 见 §4.8：`-w/--width`、`--height`、`--fit`、`-q`、`-f`、`-r`、`-j`、`--force`；库层 `resizeImage` 同步扩展（`quality` / `format` / `resized`） |
 | 高 | 批量并发可调 `-j, --concurrency` | `batchProcess` 支持该参数，但 CLI 硬编码为 4 | **已完成** | 默认命令 / compress / webp / avif / resize 均已支持（1-32，默认 4）；`-j 1` 退化为顺序处理 |
 | 高 | 自动化测试 | `npm test` 空跑，无 `*.test.js` | **部分完成** | 已补 `tests/*.test.js`：utils / compress / resize / convert / smart 模块用例（35 项已验证通过）+ CLI 端到端用例（已编写，待执行验证）+ `tests/http.test.js` 覆盖 `/api/compress`、`/api/info`、`/api/smart-analyze`、`/api/download-zip`（启动真实 UI 服务，需本地执行验证）；Web API 用例因派生子进程，本环境被跳过 |
-| 中 | WebP / AVIF 无损 `--lossless` | sharp 的 `lossless` 选项未暴露 | 未开始 | 可在 `applyEncoder` 内按格式增加分支，需同步 §5 编解码说明 |
+| 中 | WebP / AVIF 无损 `--lossless` | sharp 的 `lossless` 选项未暴露 | **已完成** | `applyEncoder` 按格式分流：WebP/AVIF/TIFF 走原生 `lossless`，PNG 拉满压缩级别，JPEG 退回最高质量；CLI(默认/compress/webp/avif/convert/resize)与 UI(无损模式开关，开启后禁用质量滑块并接 `/api/compress?lossless=1`)双入口 |
 | 中 | 体积 / 尺寸预算 `--max-size 200kb` | 无 | 未开始 | 可复用 `findOptimalQuality` 的二分骨架，改为「按目标体积搜索质量」 |
 | 中 | CI 友好输出 `--json` / `--dry-run` / `--quiet` | 无，只能解析彩色文本 | 未开始 | `--dry-run` 可与现有「跳过判定」逻辑复用，`--json` 需统一各命令结果结构 |
 | 中 | `imgmin ui --host 0.0.0.0` | 仅支持 `-p` | 未开始 | 容器 / 局域网场景；需同步 §7.1 与 `startUIServer` |
@@ -343,6 +343,14 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 - 新增 `tests/http.test.js`：派生子进程启动真实 UI 服务（`IMGMIN_NO_BROWSER=1`），端到端覆盖 `/api/compress`、`/api/info`、`/api/smart-analyze`、`/api/download-zip`（含产物下载与 zip 头 `PK` 校验）。
 - 修复 `/api/smart-analyze`：该 handler 引用了 `outputDir`，但只声明在 `/api/compress` 闭包内，自身作用域未声明，命中即抛 `ReferenceError`；现显式声明 `const outputDir = path.join(os.tmpdir(), 'imgmin-ui-output')`。
 - `startUIServer` 支持 `IMGMIN_NO_BROWSER=1` 跳过自动打开浏览器，便于测试 / CI。
+
+### 2026-09-14 · 无损编码 --lossless
+- 新增 CLI 选项 `--lossless`（覆盖默认命令 / compress / webp / avif / convert / resize），以及 UI「无损模式」开关（勾选后禁用质量滑块，并以 `lossless=1` 接入 `/api/compress`）。
+- `src/compress.js`：`applyEncoder` 增加 `{ lossless }` 参数，按格式分流——WebP / AVIF / TIFF 走原生 `lossless: true`；PNG 拉满 `compressionLevel: 9`（本身无损）；JPEG 不支持无损，退回最高质量 100。`compressImage` / `compressImageToWebp` / `compressImageToAvif` / `compressImageToFormat` / `resizeImage` 同步透传。
+- `src/convert.js`：`convertImage` 同样按格式分流无损编码。
+- `src/index.js`：各命令 action 读取 `options.lossless` 并贯穿 `processDirectory` / `processDirectoryToFormat` / `processDirectoryResize` / `compressSingleFile` / `convertToFormatSingle` / `resizeSingleFile`。
+- `src/ui.js`：`/api/compress` 读取 `req.body.lossless === '1'`，智能与非智能分支均透传 `compressImage`。
+- `tests/compress.test.js`：新增 3 个用例覆盖 `applyEncoder` 无损、`compressImage` lossless 透传、`compressImageToWebp` lossless 参数。
 
 ### 2026-09-14 · 进度可视化（第 11 节重构）
 - 第 11 节由「路线图（候选 / 当前未实现）」重构为「**能力缺口与路线图（含执行进度）**」：

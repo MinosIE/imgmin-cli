@@ -9,9 +9,10 @@ import path from 'path';
  * @param {Object} options - 转换选项
  * @param {string} options.format - 目标格式 (jpeg, png, webp, avif)
  * @param {number} options.quality - 质量 (1-100)
+ * @param {boolean} [options.lossless] - 无损编码（WebP/AVIF/TIFF；PNG 拉满压缩级别；JPEG 退回最高质量）
  */
 export async function convertImage(inputPath, outputPath, options = {}) {
-  const { format, quality = 80 } = options;
+  const { format, quality = 80, lossless = false } = options;
   
   // 确保输出目录存在
   const outputDir = path.dirname(outputPath);
@@ -28,24 +29,24 @@ export async function convertImage(inputPath, outputPath, options = {}) {
     case 'jpeg':
     case 'jpg':
       pipeline = pipeline.jpeg({ 
-        quality: Math.min(100, Math.max(1, quality)),
+        quality: lossless ? 100 : Math.min(100, Math.max(1, quality)),
         mozjpeg: true 
       });
       break;
     case 'png':
       pipeline = pipeline.png({ 
-        compressionLevel: Math.floor((100 - quality) / 10),
+        compressionLevel: lossless ? 9 : Math.floor((100 - quality) / 10),
         palette: quality < 80 
       });
       break;
     case 'webp':
-      pipeline = pipeline.webp({ quality });
+      pipeline = pipeline.webp(lossless ? { lossless: true } : { quality });
       break;
     case 'avif':
-      pipeline = pipeline.avif({ quality: Math.min(100, Math.max(1, quality)) });
+      pipeline = pipeline.avif(lossless ? { lossless: true } : { quality: Math.min(100, Math.max(1, quality)) });
       break;
     case 'tiff':
-      pipeline = pipeline.tiff({ quality });
+      pipeline = pipeline.tiff(lossless ? { lossless: true, quality } : { quality });
       break;
     case 'gif':
       pipeline = pipeline.gif();

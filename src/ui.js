@@ -47,6 +47,7 @@ app.post('/api/compress', upload.array('images', 50), async (req, res) => {
     const files = req.files;
     const smart = req.body.smart === '1';
     const metric = req.body.metric || 'ssim';
+    const lossless = req.body.lossless === '1';
 
     // Support both single format string and formats[] array
     let formats = [];
@@ -79,7 +80,7 @@ app.post('/api/compress', upload.array('images', 50), async (req, res) => {
           const baseName = path.basename(file.originalname, path.extname(file.originalname));
           const outputPath = path.join(outputDir, `${baseName}_${Date.now()}.${ext}`);
 
-          await compressImage(file.path, outputPath, { quality: sugg.quality, format: ext });
+          await compressImage(file.path, outputPath, { quality: sugg.quality, format: ext, lossless });
 
           const originalSize = fs.statSync(file.path).size;
           const compressedSize = fs.statSync(outputPath).size;
@@ -139,7 +140,8 @@ app.post('/api/compress', upload.array('images', 50), async (req, res) => {
 
               const result = await compressImage(file.path, outputPath, {
                 quality: parseInt(quality),
-                format: ext
+                format: ext,
+                lossless
               });
 
               const originalSize = result.originalSize;

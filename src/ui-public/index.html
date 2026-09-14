@@ -1165,6 +1165,18 @@
         </div>
       </div>
 
+      <div class="setting-group lossless-group">
+        <label class="smart-toggle">
+          <input type="checkbox" id="losslessMode">
+          <span class="smart-toggle-box"></span>
+          <span class="smart-toggle-text">
+            <strong>无损模式</strong>
+            <small>WebP / AVIF / TIFF 原生无损（PNG 拉满压缩，JPEG 退回最高质量）</small>
+          </span>
+        </label>
+        <div class="metric-desc" id="losslessDesc">无损编码会忽略质量滑块，保留全部像素信息（体积通常更大）。</div>
+      </div>
+
       <div class="setting-group smart-group">
         <label class="smart-toggle">
           <input type="checkbox" id="smartMode">
@@ -1225,6 +1237,7 @@
       quality: 80,
       smart: false,
       metric: 'ssim',
+      lossless: false,
       processing: false,
       zipping: false,
       results: []
@@ -1251,6 +1264,8 @@
     const smartOptions = document.getElementById('smartOptions');
     const metricSelect = document.getElementById('metricSelect');
     const metricDesc = document.getElementById('metricDesc');
+    const losslessMode = document.getElementById('losslessMode');
+    const losslessDesc = document.getElementById('losslessDesc');
     const METRIC_DESC = {};
     METRIC_DESC.ssim='SSIM：结构相似性，通用均衡';
     METRIC_DESC.butteraugli='Butteraugli：人眼感知差异，体积更小';
@@ -1366,21 +1381,30 @@
       updateQualityHint();
     });
 
+    // 依据 smart / lossless 同步「质量滑块」与「格式组」的可编辑状态
+    function syncEditableState() {
+      const lockQuality = state.smart || state.lossless;
+      qualitySlider.disabled = lockQuality;
+      qualitySlider.parentElement.parentElement.classList.toggle('dimmed', lockQuality);
+      // 智能模式才锁定格式选择；无损模式仍允许选目标格式
+      formatGroup.classList.toggle('disabled-overlay', state.smart);
+      losslessDesc.textContent = state.lossless
+        ? '无损编码已开启：忽略质量滑块，保留全部像素（体积通常更大）。'
+        : '无损编码会忽略质量滑块，保留全部像素信息（体积通常更大）。';
+    }
+
     // Smart mode toggle
     smartMode.addEventListener('change', () => {
       state.smart = smartMode.checked;
       smartOptions.style.display = state.smart ? 'block' : 'none';
       if (state.smart) updateMetricDesc();
-      // Smart mode overrides manual format & quality selection
-      if (state.smart) {
-        formatGroup.classList.add('disabled-overlay');
-        qualitySlider.disabled = true;
-        qualitySlider.parentElement.parentElement.classList.add('dimmed');
-      } else {
-        formatGroup.classList.remove('disabled-overlay');
-        qualitySlider.disabled = false;
-        qualitySlider.parentElement.parentElement.classList.remove('dimmed');
-      }
+      syncEditableState();
+    });
+
+    // Lossless mode toggle
+    losslessMode.addEventListener('change', () => {
+      state.lossless = losslessMode.checked;
+      syncEditableState();
     });
     metricSelect.addEventListener('change', () => {
       state.metric = metricSelect.value;
@@ -1687,6 +1711,9 @@
       } else {
         state.formats.forEach(fmt => formData.append('formats', fmt));
         formData.append('quality', state.quality);
+      }
+      if (state.lossless) {
+        formData.append('lossless', '1');
       }
 
       try {

@@ -160,7 +160,7 @@ CLI 智能：`imgmin smart <src> → index.js → smartSuggest(file) → analyze
 - 智能选格式 / 质量 → `src/smart.js`
 
 ## 5. 当前项目状态
-- **5.1 已完成**：CLI 全套命令（config/compress/webp/avif/convert/resize/info/ui/smart）；Web UI（拖放/文件夹/多选格式/质量滑块/Download All zip/防重 loading；单图分析卡 + 多图可删文件列表）；智能模式（内容感知格式 + SSIM/Butteraugli 自适应质量，CLI 与 UI 双入口）；宽屏布局（容器 1440px，结果双列网格）；批量并发可调（`-j, --concurrency`，1-32）；首批自动化测试（`tests/*.test.js`，模块 + CLI 端到端）。
+- **5.1 已完成**：CLI 全套命令（config/compress/webp/avif/convert/resize/info/ui/smart）；Web UI（拖放/文件夹/多选格式/质量滑块/Download All zip/防重 loading；单图分析卡 + 多图可删文件列表）；智能模式（内容感知格式 + SSIM/Butteraugli 自适应质量，CLI 与 UI 双入口）；宽屏布局（容器 1440px，结果双列网格）；批量并发可调（`-j, --concurrency`，1-32）；无损编码 `--lossless`（WebP/AVIF/TIFF 原生无损、PNG 拉满压缩、JPEG 退回最高质量，CLI 各命令 + UI「无损模式」开关双入口）；首批自动化测试（`tests/*.test.js`，模块 + CLI 端到端）。
 - **5.2 开发中**：无。
 - **5.3 未完成计划**：Web UI 与 `/api/*` 端点已补端到端测试（`tests/http.test.js`，待本地执行验证）；批量目录智能模式在 CLI 的结果汇总未展示每张理由（仅打印到终端）。
 - **5.4 技术债务**：`findOptimalQuality` 的 Butteraugli 为近似实现，非 Google 原生；`processDirectory` 智能模式不写 `_compressed` 后缀（与常规模式命名不一致）；`resize` 对动图只取首帧（sharp 默认行为）。

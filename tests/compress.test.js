@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import sharp from 'sharp';
-import { compressImage, applyEncoder, isEncodableFormat } from '../src/compress.js';
+import { compressImage, compressImageToWebp, applyEncoder, isEncodableFormat } from '../src/compress.js';
 import { makeTempDir, createNoisyImage, readMetadata, sizeOf, exists } from './helpers/images.js';
 
 test('compressImage: 按输出扩展名推断格式并落盘', async () => {
@@ -69,4 +69,36 @@ test('isEncodableFormat: 只接受可编码的输出格式', () => {
   for (const format of ['heic', 'heif', 'bmp', 'svg', '', undefined, null]) {
     assert.equal(isEncodableFormat(format), false, `${format} 不应被视为可编码格式`);
   }
+});
+
+test('applyEncoder: WebP 无损编码不抛错且产出 WebP', async () => {
+  const dir = makeTempDir();
+  const src = await createNoisyImage(path.join(dir, 'src.jpg'), { width: 200, height: 200 });
+
+  const losslessOut = path.join(dir, 'lossless.webp');
+  await applyEncoder(sharp(src), 'webp', 80, { lossless: true }).toFile(losslessOut);
+  const meta = await readMetadata(losslessOut);
+  assert.equal(meta.format, 'webp');
+  assert.ok(sizeOf(losslessOut) > 0);
+});
+
+test('compressImage: lossless 透传到 WebP 编码', async () => {
+  const dir = makeTempDir();
+  const src = await createNoisyImage(path.join(dir, 'photo.jpg'), { width: 256, height: 256 });
+
+  const lossy = path.join(dir, 'lossy.webp');
+  const lossless = path.join(dir, 'lossless.webp');
+  await compressImage(src, lossy, { quality: 80 });
+  await compressImage(src, lossless, { quality: 80, lossless: true });
+
+  // 无损保留全部像素，通常体积不小于有损（同尺寸噪声图）
+  assert.ok(sizeOf(lossless) >= sizeOf(lossy), `期望无损(${sizeOf(lossless)}) ≥ 有损(${sizeOf(lossy)})`);
+});
+
+test('compressImageToWebp: lossless 参数生成 WebP', async () => {
+  const dir = makeTempDir();
+  const src = await createNoisyImage(path.join(dir, 's.jpg'));
+  const out = path.join(dir, 'out.webp');
+  await compressImageToWebp(src, out, 80, true);
+  assert.equal((await readMetadata(out)).format, 'webp');
 });
