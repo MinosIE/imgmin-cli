@@ -11,7 +11,8 @@
   - 全局链接（否则 `imgmin` 命令不存在）：`npm link`（或 `pnpm link --global`）
   - 启动 Web UI：`imgmin ui`（默认端口 3000，可 `-p <port>`）
   - 压缩当前目录：`imgmin compress`（别名 `c`）；智能模式：`imgmin smart <file|dir>` 仅分析不压缩
-  - 跑测试：`npm test`（= `node --test`，目前仓库无测试文件）
+  - 调整尺寸：`imgmin resize <file|dir> -w 1200 [-q 75 -f webp]`；批量并发：任意批量命令加 `-j <n>`（默认 4）
+  - 跑测试：`npm test`（= `node --test`，自动发现 `tests/*.test.js`；夹具由 sharp 现场生成）
 - **改代码前必读**：第 3 节（禁止项 / 依赖契约 / 常见错误）。
 
 ## 1. 项目全局认知
@@ -56,13 +57,14 @@ bin/cli.js ──import──▶ src/index.js        (CLI 入口 + 子命令定�
 |---|---|---|---|
 | 入口 | `bin/cli.js` | 仅 `import '../src/index.js'`，无逻辑 | 不放业务逻辑 |
 | CLI 编排 | `src/index.js` | 定义全部子命令、解析参数、调用压缩/转换、目录遍历 `processDirectory` / `compressSingleFile`、智能命令 | 不直接调 sharp（委托 compress.js） |
-| 压缩 | `src/compress.js` | `compressImage` / `compressImageToWebp` / `compressImageToAvif` / `compressImageToFormat` / `resizeImage` / `compressDirectory` | 不发网络请求 |
+| 压缩 | `src/compress.js` | `compressImage` / `compressImageToWebp` / `compressImageToAvif` / `compressImageToFormat` / `resizeImage` / `compressDirectory`；导出 `applyEncoder`（编码参数统一收口）、`isEncodableFormat`、`RESIZE_FITS` | 不发网络请求 |
 | 转换 | `src/convert.js` | `convertImage` 及 per-format helper、`getSupportedFormats` | |
 | 工具 | `src/utils.js` | `glob`、`getImageInfo`、`formatFileSize`、`isImageFile`、`ensureDir`、`batchProcess` | 不含业务逻辑 |
 | 配置 | `src/config.js` | 读写 `~/.imgminrc`（JSON） | |
 | 智能 | `src/smart.js` | `analyzeImage`（主色/透明/类型→推荐格式）、`findOptimalQuality`（SSIM/Butteraugli 二分搜索）、`smartSuggest` | 纯本地，无 IO 依赖 UI |
 | Web 服务 | `src/ui.js` | express 服务、`/api/compress`、`/api/info`、`/api/download`、`/api/download-zip`、`/api/smart-analyze`、`startUIServer` | 不写前端样式 |
 | 前端 | `src/ui-public/index.html` | 单文件 SPA：拖放区 / 格式多选 / 质量滑块 / 智能开关 / 结果展示 | 无构建步骤，改完即生效 |
+| 测试 | `tests/*.test.js` | 模块单元测试 + CLI 端到端（`tests/helpers/images.js` 提供 sharp 现场生成的夹具） | 不写用户目录（config 用例用隔离 HOME 子进程） |
 
 ### 1.5 数据流 / 业务流程（关键链路）
 Web 压缩：`dropZone → FormData(images, formats[] | smart, quality, metric) → fetch /api/compress → ui.js 遍历文件 → compressImage(smartSuggest?) → 写 /tmp/imgmin-ui-output → 返回 {results} → 前端渲染卡片 → Download All → /api/download-zip → ZipArchive 流式 pipe 给浏览器`
@@ -83,7 +85,7 @@ CLI 智能：`imgmin smart <src> → index.js → smartSuggest(file) → analyze
 - **2.5 API 契约**：`/api/compress` 接收字段——`images`（multer 多文件）、`formats[]`（多选时）或 `format`（单格式）、`quality`、`smart`（`'1'` 时启用）、`metric`（`ssim`/`butteraugli`）。返回 `{ results: [{ success, format, savedPercent, outputPath, downloadUrl, ... , smart?, quality?, reason? }] }`。**前端 `index.html` 与 `ui.js` 的字段名必须同步。**
 - **2.6 错误处理**：CLI 用 `ora` spinner + `try/catch` 打印 `chalk` 错误；UI 用 `express` 全局错误处理器（`ui.js` 末尾），multer 超限返回 413/400。
 - **2.7 日志**：CLI 走 `chalk`/`ora`；服务端错误 `console.error`（含 'Compress endpoint error' 等前缀），便于在终端复现。
-- **2.8 测试**：当前无测试文件（`npm test` 跑 `node --test` 为空）。新增功能建议补 `*.test.js`。
+- **2.8 测试**：`npm test` = `node --test`，自动发现 `tests/*.test.js`；`tests/helpers/` 下的文件不会被当成用例（目录名是 `tests` 而非 `test`，只有 `*.test.js` 会被采集）。夹具在 `tests/helpers/images.js` 里用 sharp 现场生成，**不要提交二进制快照**。新增/修改功能必须同步补用例；涉及 `config.js` 的用例必须走子进程并设置隔离 `HOME`，禁止读写真实 `~/.imgminrc`。
 
 ## 3. AI Agent 开发指导  ★最高优先级★
 
@@ -104,6 +106,7 @@ CLI 智能：`imgmin smart <src> → index.js → smartSuggest(file) → analyze
 |---|---|
 | `index.html` 发给 `/api/compress` 的字段名 | `ui.js` 端点里读取的同名 `req.body.*` |
 | `compress.js` 的返回字段 | `index.js` 结果展示 / `ui.js` 前端卡片渲染 |
+| `resizeImage` 的入参与返回字段 | `index.js` 的 `resize` 命令输出 + `resizeSingleFile` / `processDirectoryResize` 的跳过判定（依赖 `resized`） |
 | `smart.js` 的 `smartSuggest` 返回结构 | `ui.js` `/api/smart-analyze` 与 `/api/compress` smart 分支的映射 |
 | `package.json` 的 `bin` | `bin/cli.js` 路径 |
 | 新增依赖 | 同步 `package.json` + 重新 `npm link`/`pnpm install` |
@@ -114,10 +117,14 @@ CLI 智能：`imgmin smart <src> → index.js → smartSuggest(file) → analyze
 - **现象**：压缩后文件反而变大 → **根因**：源已高度压缩 / 质量过高 → **正确**：`compressSingleFile`/`processDirectory` 已有「更大则跳过」逻辑；智能模式用低质量目标避免。
 - **现象**：拖入文件夹提示「不支持」→ **根因**：`dataTransfer.files` 对文件夹为空 → **正确**：用 `webkitGetAsEntry()` 递归遍历（已在 `288a592` 修复）。
 - **现象**：UI 改了没反应 → **根因**：忘了重启 `imgmin ui`，或改错文件（应为 `src/ui-public/index.html` 而非其他） → **正确**：重启服务。
+- **现象**：`imgmin smart` 打印 `NaN undefined` → **根因**：`smartSuggest` 只返回 `size`，而 `index.js` 读的是 `originalSize` → **正确**：`smartSuggest` 现同时返回 `originalSize` 与 `size`，两个都别删（UI 的 `/api/smart-analyze` 用的是 `size`）。
+- **现象**：`--no-recursive` 时一个文件都匹配不到 → **根因**：`glob` 的非递归分支没有解析 `{jpg,png}` 花括号，把整个 `{jpg,png}` 当成扩展名比较 → **正确**：`glob` 现统一走 `parseExtensions`（已在本次修复，勿回退）。
+- **现象**：`resize` 明明传了 `-w 0` / `--height 0.5` 却报 `width or height is required` → **根因**：`resizeImage` 用真值判断「是否传参」 → **正确**：以 `undefined` 判缺失、以 `<1` 判非法（已在本次修复）。
+- **现象**：并发压缩时报错或产物损坏 → **根因**：同目录多个源文件（`photo.jpg` + `photo.png`）映射到同一输出路径并发写 → **正确**：`processDirectory` / `processDirectoryResize` 用 `claimedOutputs` 认领路径，冲突者跳过并提示 `Skip (duplicate output)`。
 
 ### 3.5 推荐开发流程
 1. 改 `src/*.js`（ESM）或 `src/ui-public/index.html`。
-2. 本地验证：`node bin/cli.js compress --smart /tmp/xxx.jpg` 或 `node bin/cli.js ui` 手动过。
+2. 本地验证：`npm test` + `node bin/cli.js compress --smart /tmp/xxx.jpg` 或 `node bin/cli.js ui` 手动过。
 3. 若改了依赖或 bin，重跑 `npm link`。
 4. 提交（commit message 中文 + 类型前缀，如 `feat(ui):`、`fix:`）。
 
@@ -131,12 +138,15 @@ CLI 智能：`imgmin smart <src> → index.js → smartSuggest(file) → analyze
 - 改 `ui.js` 端点：用浏览器走「上传→压缩→Download All」全链路，确认 zip 头为 `PK`。
 - 改 `index.html`：确认拖放、格式多选、质量滑块、智能开关、结果卡片、已选文件列表与删除按钮均正常。
 - 改 `smart.js`：跑 `imgmin smart` 验证三种判定（照片→avif、纯色→webp、透明→webp）。
+- 改 resize 相关逻辑：跑 `npm test`（`tests/resize.test.js` + `tests/cli.test.js`），并手动 `imgmin resize <图> -w 400` 确认生成 `_resized` 副本且原图未被改动。
+- 改并发相关逻辑：至少跑一次 `-j 2` 与 `-j 1`，确认两种驱动结果一致。
 
 ## 4. 文档索引
 | 文档 | 路径 | 用途 | 重要度 | 何时查看 |
 |---|---|---|---|---|
 | 本文件 | `AGENTS.md` | Agent 开发指南 | 🔴必读 | 任何改动前 |
 | 项目说明 | `README.md` | 用户向功能/用法介绍 | 🟡常用 | 了解用户视角功能 |
+| 产品需求 | `PRD.md` | 反向整理的功能规格；**§11 为唯一带执行进度的章节** | 🟡常用 | 增删能力 / 改行为 / 更新路线图时 |
 | 配置 | `~/.imgminrc` | 运行时配置（quality/format 等） | 🟢参考 | 排查默认行为 |
 | 依赖锁 | `package-lock.json` | 依赖精确版本 | 🟢参考 | 依赖漂移时 |
 
@@ -148,12 +158,13 @@ CLI 智能：`imgmin smart <src> → index.js → smartSuggest(file) → analyze
 - 智能选格式 / 质量 → `src/smart.js`
 
 ## 5. 当前项目状态
-- **5.1 已完成**：CLI 全套命令（config/compress/webp/avif/convert/info/ui/smart）；Web UI（拖放/文件夹/多选格式/质量滑块/Download All zip/防重 loading；单图分析卡 + 多图可删文件列表）；智能模式（内容感知格式 + SSIM/Butteraugli 自适应质量，CLI 与 UI 双入口）；宽屏布局（容器 1440px，结果双列网格）。
-- **5.2 开发中**：无（相对 `main` 最新提交 `288a592`）。
-- **5.3 未完成计划**：批量目录智能模式在 CLI 的结果汇总未展示每张理由（仅打印到终端）；无自动化测试。
-- **5.4 技术债务**：`findOptimalQuality` 的 Butteraugli 为近似实现，非 Google 原生；`processDirectory` 智能模式不写 `_compressed` 后缀（与常规模式命名不一致）。
-- **5.5 已知问题**：极小透明 PNG 转 PNG 可能变大（已改为默认转 WebP 缓解）；`npm test` 无用例。
-- **5.6 路线图**：补充 `*.test.js`；智能模式结果在 UI 汇总卡片展示 per-file 决策；支持 AVIF 之外的有损格式自适应。
+- **5.1 已完成**：CLI 全套命令（config/compress/webp/avif/convert/resize/info/ui/smart）；Web UI（拖放/文件夹/多选格式/质量滑块/Download All zip/防重 loading；单图分析卡 + 多图可删文件列表）；智能模式（内容感知格式 + SSIM/Butteraugli 自适应质量，CLI 与 UI 双入口）；宽屏布局（容器 1440px，结果双列网格）；批量并发可调（`-j, --concurrency`，1-32）；首批自动化测试（`tests/*.test.js`，模块 + CLI 端到端）。
+- **5.2 开发中**：无。
+- **5.3 未完成计划**：Web UI 与 `/api/*` 端点缺少测试；批量目录智能模式在 CLI 的结果汇总未展示每张理由（仅打印到终端）。
+- **5.4 技术债务**：`findOptimalQuality` 的 Butteraugli 为近似实现，非 Google 原生；`processDirectory` 智能模式不写 `_compressed` 后缀（与常规模式命名不一致）；`resize` 对动图只取首帧（sharp 默认行为）。
+- **5.5 已知问题**：极小透明 PNG 转 PNG 可能变大（已改为默认转 WebP 缓解）；并发批处理为「分批 `Promise.allSettled`」，不是精细限流（单批内会同时启动 `concurrency` 个任务）。
+- **5.6 路线图**：Web API 集成测试；`--json`/`--dry-run` 输出；智能模式结果在 UI 汇总卡片展示 per-file 决策；支持 AVIF 之外的有损格式自适应。
 
 ## 6. 变更记录（本文件）
 - 2026-09-14：初始生成 AGENTS.md。覆盖架构、模块职责、UI 字段契约、archiver v8 / 智能模式 / 拖文件夹等真实踩坑与依赖联动表。
+- 2026-09-14（二次）：新增 `resize` 命令与 `-j/--concurrency` 的模块职责与联动说明；补充测试规范（`tests/` 采集规则、隔离 HOME）；新增 4 条真实踩坑（`smartSuggest` 缺 `originalSize`、`glob` 非递归花括号、`resizeImage` 校验顺序、并发重复输出）；更新第 5 节状态（测试已补、resize 已上线）。

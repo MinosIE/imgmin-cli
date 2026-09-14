@@ -2,6 +2,7 @@
 
 > **文档性质**：本文档基于 `imgmin` 仓库**当前已实现代码**反向整理而成，并非新需求规格。功能描述严格对照源码（`src/index.js`、`src/compress.js`、`src/convert.js`、`src/smart.js`、`src/utils.js`、`src/config.js`、`src/ui.js`、`src/ui-public/index.html`），作为后续迭代的契约基线。
 > 标记为「候选 / 未实现」的章节属于未来可能方向，当前不视为承诺范围。
+> **执行进度统一记录在第 11 节**（能力缺口与路线图，含状态标记）；每完成一项需同步更新该节状态与 §13 变更记录。
 
 ---
 
@@ -66,25 +67,27 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 
 | 形态 | 能力 | 状态 |
 |---|---|---|
-| CLI | 默认批量命令 / config / compress(c) / smart / webp / avif / convert / info / ui | 已实现 |
+| CLI | 默认批量命令 / config / compress(c) / smart / webp / avif / convert / resize / info / ui | 已实现 |
 | Web UI | 拖拽上传、文件夹上传、格式多选、质量滑块、智能开关、单图压缩潜力分析、结果卡片、Download All(zip) | 已实现 |
 | 智能模式 | 内容感知选格式 + SSIM/Butteraugli 自适应质量 | 已实现（指标为近似实现） |
-| 模块 API | `compressImage` / `convertImage` / `getImageInfo` / `glob` 等 | 已实现 |
-| 自动化测试 | `npm test`（node --test） | 暂空，未实现 |
+| 模块 API | `compressImage` / `resizeImage` / `convertImage` / `getImageInfo` / `glob` 等 | 已实现 |
+| 批量并发 | `-j, --concurrency`（1-32，默认 4） | 已实现 |
+| 自动化测试 | `npm test`（`node --test`，`tests/*.test.js` 单元 + CLI 端到端） | 已实现（首批） |
 
 ---
 
 ## 4. CLI 功能规格
 
 > 全局：`imgmin [子命令] [选项]`；`program.version('1.0.0')`。
-> 默认值（无 config 时）`quality=80`、`format=webp`、`recursive=true`（compress/webp/avif 默认递归）。
+> 默认值（无 config 时）`quality=80`、`format=webp`、`recursive=true`（compress/webp/avif/resize 默认递归）。
+> 批量并发：默认 4，可用 `-j, --concurrency <n>` 调整（下限 1、上限 32）；支持该选项的命令为默认命令、compress、webp、avif、resize。
 
 ### 4.1 默认命令（无子命令）
 - 对当前工作目录递归处理所有图片（`**/*.{jpg,jpeg,png,gif,tiff,tif,bmp,svg,avif,webp}`）。
 - 已是 WebP → 优化 WebP；已是 AVIF → 优化 AVIF；其他 → 转目标格式（默认 webp，可用 `-f avif`）。
 - 并发 4 线程（`batchProcess`）。文件名冲突自动加 `_1/_2`。
 - 输出：打印处理数 / 转换数 / 优化数 / 跳过数 / 失败数 / 总节省%。
-- 选项：`-q, --quality <n>`、`-f, --format <webp|avif>`。
+- 选项：`-q, --quality <n>`、`-f, --format <webp|avif>`、`-j, --concurrency <n>`（默认 4）。
 
 ### 4.2 config
 - 读写 `~/.imgminrc`（JSON）；缓存于内存。
@@ -102,12 +105,14 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
   - `-f, --format <jpeg|png|webp|avif|tiff|gif>`
   - `--no-webp`（不生成 WebP 版本）
   - `--force`（替换原文件，无 `_compressed` 后缀）
+  - `-j, --concurrency <n>`（目录并发数，默认 4，上限 32）
   - `--smart`、`--metric <ssim|butteraugli>`、`--threshold <n>`（智能模式）
 - 输出行为：
   - 无 output：同目录生成 `<filename>_compressed.<ext>` + `<filename>.webp`（除非 `--no-webp`）。
   - 有 output：输出到文件/目录。
   - `--force`：更小才替换原图。
   - **智能跳过**：压缩后 ≥ 原大小则删除产物并跳过（常规与 `--force` 均适用）。
+  - **重复输出跳过**：并发下多个源文件映射到同一输出路径（如 `photo.jpg`/`photo.png` 都指向 `photo.webp`）时，后到者跳过并提示 `Skip (duplicate output)`，避免并发写同一文件。
   - 目录统计：Compressed / Skipped / Skipped(larger) / WebP generated / Failed。
 
 ### 4.4 smart
@@ -121,7 +126,7 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 - 工厂命令 `createFormatCommand(format)`。
 - 语法：`imgmin webp|avif [source] [output] [options]`。
 - 默认质量：webp=80、avif=65。
-- 选项：`-q`、`-r/--recursive`、`--force`。
+- 选项：`-q`、`-r/--recursive`、`-j/--concurrency`（默认 4）、`--force`。
 - 行为：无 output 在同目录生成 `.webp/.avif`；存在则跳过（除非 `--force`）；并发 4。
 - AVIF 质量 >70 时打印建议降低提示（推荐 50-65）。
 - 输出：转换数 / 总节省% / 原总→目标总 / 跳过 / 失败。
@@ -130,11 +135,27 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 - 用途：任意格式间转换（需显式 source + output）。
 - 语法：`imgmin convert <source> <output> -q <n>`（目标格式由 output 扩展名决定）。
 
-### 4.8 info
+### 4.8 resize
+- 用途：等比 / 裁剪缩放，可同时重编码为其他格式。
+- 语法：`imgmin resize [source] [output] [options]`（无 source 用 cwd）。
+- 选项：
+  - `-w, --width <n>`、`--height <n>`：至少给一个，另一边按原始宽高比自动计算。
+  - `--fit <type>`：`cover` / `contain` / `fill` / `inside`（默认）/ `outside`，非法值直接报错退出（exitCode 1）。
+  - `-q, --quality <n>`：省略时不套用编码参数，沿用 sharp 对目标扩展名的默认编码。
+  - `-f, --format <type>`：jpeg / png / webp / avif / tiff / gif。
+  - `-r, --recursive`、`-j, --concurrency <n>`（默认 4）、`--force`。
+- 行为：
+  - 无 output：生成 `<filename>_resized.<ext>`；`--force` 时先写临时文件再原地替换。
+  - 有 output：写到指定文件或目录（目录模式保留相对目录结构）。
+  - `withoutEnlargement` 默认开启：目标大于原图时不放大。
+  - **尺寸未变化则跳过**：非 output 目录模式删除产物并计 `skippedNoop`（提示 `Skip (unchanged)`）；output 目录模式保留副本（复制语义）。
+  - 目录统计：Resized / Total saved / Skipped / Skipped(dimensions unchanged) / Failed。
+
+### 4.9 info
 - 用途：打印单图信息（文件、大小、格式、尺寸；有 alpha 显示 Alpha；有 density 显示 DPI）。
 - 底层 `getImageInfo` 还返回 `channels/space/depth/orientation`（CLI 仅展示部分，Web 用全量）。
 
-### 4.9 ui
+### 4.10 ui
 - 语法：`imgmin ui [-p <port>]`（默认 3000）。
 - 启动 express，托管 `src/ui-public`，自动打开浏览器；端口被占用自动 +1。
 
@@ -227,7 +248,7 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 
 ## 9. 非功能性需求
 
-- **性能**：批量默认 4 并发；目录处理分批更新 spinner。
+- **性能**：批量默认 4 并发（`-j/--concurrency` 可调，上限 32）；目录处理分批更新 spinner；`-j 1` 时退化为顺序处理，便于排查。
 - **兼容**：Node ≥ 18；纯 ESM；无前端打包器。
 - **安全/稳健**：
   - 压缩后更大则自动跳过 / 保留原图，避免「越压越大」。
@@ -246,22 +267,81 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 - **`analyzeImage` 阈值经验化**：照片/图标/纯色判定为启发式，复杂图可能选错格式。
 - **智能模式 CLI 目录汇总不展示 per-file 理由**：仅终端打印，未结构化汇总。
 - **极小透明 PNG 转 PNG 可能变大**：已默认转 WebP 缓解。
-- **无自动化测试**：`npm test` 空跑，缺 `*.test.js`。
+- **测试覆盖不完整**：已补 `tests/*.test.js`（utils / compress / resize / convert / smart + CLI 端到端），但 Web UI 与 `/api/*` 端点仍无测试。
+- **`resize` 不处理动画**：sharp 默认只取首帧，动图（GIF / 动画 WebP）缩放后会丢帧。
 - **`processDirectory` 智能模式不写 `_compressed` 后缀**：与常规模式命名不一致。
 
 ---
 
-## 11. 路线图（候选 / 当前未实现）
+## 11. 能力缺口与路线图（含执行进度）
 
-> 以下为可能的演进方向，**非当前承诺需求**，落地前需评审：
-- 补充 `*.test.js` 单元 / 集成测试。
-- Web UI 智能模式结果展示 per-file 决策卡片。
-- 扩展有损格式（除 AVIF 外）的自适应质量。
-- 支持 HEIC 导入（需引入额外解码依赖）。
-- 批量目录智能模式在 CLI 结构化汇总每张理由。
+> 本节汇总「当前还不具备 / 可继续做」的能力，并标注执行进度。
+> 状态取值：**已完成** / **部分完成** / **未开始** / **搁置**。
+> 维护约定：某项落地后必须把状态改为「已完成」并写明落地方式与对应小节，同时在 §13 追加变更记录；本节优先级为建议排序，非承诺排期。
+
+### 11.1 执行进度总览（最近更新：2026-09-14）
+
+| 优先级 | 能力 | 缺口描述 | 进度 | 落地情况 / 备注 |
+|---|---|---|---|---|
+| 高 | `imgmin resize` 子命令 | `resizeImage` 已实现且导出，但 CLI 无入口 | **已完成** | 见 §4.8：`-w/--width`、`--height`、`--fit`、`-q`、`-f`、`-r`、`-j`、`--force`；库层 `resizeImage` 同步扩展（`quality` / `format` / `resized`） |
+| 高 | 批量并发可调 `-j, --concurrency` | `batchProcess` 支持该参数，但 CLI 硬编码为 4 | **已完成** | 默认命令 / compress / webp / avif / resize 均已支持（1-32，默认 4）；`-j 1` 退化为顺序处理 |
+| 高 | 自动化测试 | `npm test` 空跑，无 `*.test.js` | **部分完成** | 已补 `tests/*.test.js`：utils / compress / resize / convert / smart 模块用例（35 项已验证通过）+ CLI 端到端用例（已编写，待执行验证）；**Web UI 与 `/api/*` 端点仍未覆盖** |
+| 中 | WebP / AVIF 无损 `--lossless` | sharp 的 `lossless` 选项未暴露 | 未开始 | 可在 `applyEncoder` 内按格式增加分支，需同步 §5 编解码说明 |
+| 中 | 体积 / 尺寸预算 `--max-size 200kb` | 无 | 未开始 | 可复用 `findOptimalQuality` 的二分骨架，改为「按目标体积搜索质量」 |
+| 中 | CI 友好输出 `--json` / `--dry-run` / `--quiet` | 无，只能解析彩色文本 | 未开始 | `--dry-run` 可与现有「跳过判定」逻辑复用，`--json` 需统一各命令结果结构 |
+| 中 | `imgmin ui --host 0.0.0.0` | 仅支持 `-p` | 未开始 | 容器 / 局域网场景；需同步 §7.1 与 `startUIServer` |
+| 中 | 元数据控制 `--strip` / EXIF 自动旋转 | 未显式处理 | 未开始 | 涉及 sharp `withMetadata()` / `rotate()`，会改变现有「压缩即丢元数据」的隐含行为 |
+| 低 | watch 增量模式 | 无 | 未开始 | 可结合 mtime + 内容 hash 跳过未变更文件 |
+| 低 | SVG 优化（svgo） | 当前被 sharp 栅格化，丢失矢量特性 | 未开始 | 需引入 svgo，并纳入 §5 输入格式说明 |
+| 低 | HEIC / HEIF 导入 | sharp 解码不支持 | 未开始 | 见 §5、§10；需额外解码依赖 |
+| 低 | 生态集成（GitHub Action / pre-commit 钩子 / Vite·Webpack 插件） | 无 | 未开始 | 依赖 CLI 输出稳定（建议先做 `--json`） |
+| 低 | 智能模式增强 | 指标为近似实现；CLI 目录无 per-file 结构化汇总；UI 无决策卡片 | 未开始 | 细项见 §11.2 |
+| 低 | `docs/` 目录为空 | PRD / AGENTS 均在根目录 | 未开始 | 可选：迁入 `docs/` 需同步 AGENTS.md §4 文档索引 |
+
+### 11.2 待细化项（原路线图，未开始）
+
+- **智能模式 · CLI 汇总**：批量目录模式下结构化汇总每张图的决策理由（当前仅逐行打印到终端）。
+- **智能模式 · UI 决策卡片**：Web 结果区展示 per-file 决策（格式 / 质量 / 指标分数 / 理由）。
+- **智能模式 · 指标精度**：以更精确的实现（原生 SSIM / Butteraugli 绑定）替换当前近似算法。
+- **智能模式 · 自适应质量扩展**：把自适应质量扩展到 AVIF 之外的有损格式（当前 JPEG / PNG 走固定质量）。
+- **并发模型**：当前为分批 `Promise.allSettled`，如需精细限流可引入 `p-limit` 风格调度。
+- **测试**：补充 Web UI 与 `/api/*` 端点的集成测试（`/api/compress`、`/api/info`、`/api/smart-analyze`、`/api/download-zip`）。
+
+### 11.3 本次迭代（2026-09-14）完成情况
+
+| 计划项 | 状态 | 交付物 |
+|---|---|---|
+| `resize` 子命令 | 已完成 | `src/compress.js`（`resizeImage` 扩展）、`src/index.js`（`resize` 命令 + `resizeSingleFile` + `processDirectoryResize`） |
+| `-j/--concurrency` | 已完成 | `src/index.js`（`parseConcurrency`、各批量命令选项、`processDirectory` 并发化） |
+| 首批自动化测试 | 部分完成 | `tests/`（helpers + 6 个用例文件）；仍缺 Web API 测试 |
+| 文档同步 | 已完成 | README（resize / 并发 / 测试章节）、PRD（§4.8、§11、§13）、AGENTS.md（测试规范与踩坑） |
 
 ---
 
 ## 12. 合规说明
 
 本文档为「代码 → 文档」反向整理，现状即契约：任何后续改动若与第 4–9 节行为不一致，视为行为变更，需同步更新本 PRD 与 `AGENTS.md` 的对应小节（见 AGENTS.md 第 0 节维护约定）。
+
+第 11 节是本文档**唯一带执行进度标记**的章节：完成某项能力后，必须把状态从「未开始 / 部分完成」改为「已完成」，写明落地方式与对应小节，并在 §13 追加变更记录；引入新的待办方向也应追加到 §11.2，保持「缺口清单」与实际代码一致。
+
+---
+
+## 13. 变更记录
+
+### 2026-09-14 · resize / 并发 / 测试
+- **新增 `resize` 命令**（§4.8）：`-w/--width`、`--height`、`--fit`、`-q`、`-f`、`-r`、`-j`、`--force`；库层 `resizeImage` 扩展为支持 `quality` / `format` / `withoutEnlargement`，并返回 `resized` 与前后尺寸。
+- **批量并发可调**：默认命令、compress、webp、avif、resize 新增 `-j, --concurrency`（1-32，默认 4）；`processDirectory` 重构为「单文件 worker + 顺序/并发双驱动」，行为与顺序模式保持一致。
+- **并发写冲突防护**：新增输出路径认领集合，重复映射到同一路径的源文件会被跳过（`Skip (duplicate output)`）。
+- **新增测试**：`tests/*.test.js`（helpers 现场用 sharp 生成夹具，无二进制快照），覆盖 utils / compress / resize / convert / smart 与 CLI 端到端（含 `config` 的隔离 HOME）。
+- **缺陷修复**：
+  - `glob` 非递归分支无法解析 `{jpg,png}` 花括号扩展名，导致 `--no-recursive` 匹配不到任何文件。
+  - `smartSuggest` 未返回 `originalSize`，导致 `imgmin smart` 打印 `NaN undefined`。
+  - `resizeImage` 的「参数缺失」与「参数非法」校验顺序错误（`width/height` 为 0 时被误判为未传）。
+- **`compress.js` 结构调整**：抽出 `applyEncoder`（编码参数统一收口，质量统一夹取到 1-100）并新增 `isEncodableFormat` / `RESIZE_FITS` 导出。
+
+### 2026-09-14 · 进度可视化（第 11 节重构）
+- 第 11 节由「路线图（候选 / 当前未实现）」重构为「**能力缺口与路线图（含执行进度）**」：
+  - 新增 **11.1 执行进度总览**：15 项能力的优先级 / 缺口描述 / 进度 / 落地情况（`已完成` / `部分完成` / `未开始` / `搁置`）。
+  - 新增 **11.2 待细化项**：收纳原路线图 6 条未开始方向，并补充 Web API 集成测试的具体端点清单。
+  - 新增 **11.3 本次迭代完成情况**：映射本次交付物到具体文件。
+- 文档头部与 §12 增加「进度维护约定」：完成能力后须更新第 11 节状态并追加本节记录。

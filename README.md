@@ -28,6 +28,13 @@ imgmin c photo.jpg        # 压缩并生成 webp
 imgmin c .                # 压缩当前目录所有图片
 imgmin webp ./images -r   # 批量转换为 webp
 imgmin avif ./images -r   # 批量转换为 avif
+imgmin resize photo.jpg -w 1200  # 等比缩放到宽 1200
+```
+
+## 测试
+
+```bash
+npm test                  # 运行 node --test（模块单元测试 + CLI 端到端测试）
 ```
 
 ## 命令
@@ -50,6 +57,7 @@ imgmin -f avif              # 默认转换为 AVIF（而非 WebP）
 **选项：**
 - `-q, --quality <number>` - 压缩质量 1-100（默认使用配置值 80）
 - `-f, --format <type>` - 目标转换格式（webp 或 avif，默认 webp）
+- `-j, --concurrency <number>` - 并发数（默认 4，上限 32）
 
 **特性：**
 - 零配置运行，无需任何参数
@@ -116,6 +124,10 @@ imgmin c input.jpg --no-webp                  # 只压缩，不生成 WebP 版�
 - `-f, --format <type>` - 输出格式（jpeg, png, webp, avif, tiff, gif）
 - `--no-webp` - 不生成 WebP 版本
 - `--force` - 用压缩后的文件替换原文件（无 `_compressed` 后缀）
+- `--smart` - 智能模式：内容感知选格式 + 自适应质量（SSIM/Butteraugli）
+- `--metric <type>` - 智能模式指标：`ssim`（默认）或 `butteraugli`
+- `--threshold <number>` - 智能模式质量阈值（SSIM≥0.95、Butteraugli≤1.2 为默认）
+- `-j, --concurrency <number>` - 目录并发数（默认 4，上限 32）
 
 **输出行为：**
 - **无 output 参数时**：在原目录生成 `<filename>_compressed.<ext>` 和 `<filename>.webp`
@@ -152,6 +164,7 @@ imgmin webp ./images --force                 # 强制覆盖已存在的 WebP 文
 **选项：**
 - `-q, --quality <number>` - 质量 1-100（默认 80）
 - `-r, --recursive` - 递归处理子目录（默认启用，使用 --no-recursive 关闭）
+- `-j, --concurrency <number>` - 目录并发数（默认 4，上限 32）
 - `--force` - 强制覆盖已存在的目标文件
 
 **输出行为：**
@@ -184,6 +197,7 @@ imgmin avif ./images --force                 # 强制覆盖已存在的 AVIF 文
 **选项：**
 - `-q, --quality <number>` - 质量 1-100（默认 65，AVIF 推荐使用较低质量值）
 - `-r, --recursive` - 递归处理子目录（默认启用，使用 --no-recursive 关闭）
+- `-j, --concurrency <number>` - 目录并发数（默认 4，上限 32）
 - `--force` - 强制覆盖已存在的目标文件
 
 **输出行为：**
@@ -220,6 +234,39 @@ imgmin convert photo.jpg photo.tiff
 **支持的格式：**
 - **输入：** JPEG, JPG, PNG, GIF, WebP, TIFF, TIF, BMP, SVG, AVIF
 - **输出：** JPEG, JPG, PNG, WebP, AVIF, TIFF, GIF
+
+### resize - 调整尺寸
+
+```bash
+imgmin resize <source> [output] [options]
+
+# 示例
+imgmin resize photo.jpg -w 1200                          # 等比缩到宽 1200，生成 photo_resized.jpg
+imgmin resize photo.jpg --height 800                     # 只给高度，宽度按比例算
+imgmin resize photo.jpg -w 800 --height 800 --fit cover  # 裁剪为 800×800
+imgmin resize photo.jpg -w 1200 -q 75 -f webp            # 缩放并重编码为 WebP
+imgmin resize ./images ./out -w 800 -j 8                 # 批量缩放到输出目录，8 并发
+imgmin resize photo.jpg -w 1200 --force                  # 原地替换（仅尺寸真正变化时）
+```
+
+**选项：**
+- `-w, --width <number>` - 目标宽度（像素）
+- `--height <number>` - 目标高度（像素）；`-h` 已被 help 占用，只能使用长选项
+- `--fit <type>` - 适应方式：`cover`、`contain`、`fill`、`inside`（默认）、`outside`
+- `-q, --quality <number>` - 重编码质量 1-100（不传则沿用原编码器的默认值）
+- `-f, --format <type>` - 输出格式（jpeg, png, webp, avif, tiff, gif）
+- `-r, --recursive` - 递归处理子目录（默认启用，使用 --no-recursive 关闭）
+- `-j, --concurrency <number>` - 目录并发数（默认 4，上限 32）
+- `--force` - 原地替换原文件（仅当尺寸真正变化时）
+
+**输出行为：**
+- **无 output 参数时**：原目录生成 `<filename>_resized.<ext>`；使用 `--force` 时原地替换
+- **有 output 参数时**：输出到指定文件或目录（目录模式保留相对目录结构）
+- **默认禁止放大**：目标尺寸大于原图时保持原尺寸，不做插值放大
+- **尺寸未变化时跳过**：不产生无意义的副本（目录模式提示 `Skip (unchanged)`）
+- **原图安全**：除 `--force` 外不修改、不删除原图
+
+**提示：** 只给 `-w` 或 `--height` 之一时，另一边按原始宽高比自动计算。
 
 ### info - 查看图片信息
 
@@ -342,12 +389,19 @@ console.log(result);
 ```javascript
 import { resizeImage } from 'imgmin-cli/src/compress.js';
 
-// 调整尺寸
-await resizeImage('input.jpg', 'output.jpg', {
+// 等比缩小（只给一边即可，另一边自动计算）
+const resized = await resizeImage('input.jpg', 'output.jpg', { width: 800 });
+
+// 裁剪为固定尺寸，并重编码为 WebP
+await resizeImage('input.png', 'output.webp', {
   width: 800,
   height: 600,
-  fit: 'inside'  // cover, contain, fill, inside, outside
+  fit: 'cover',    // cover, contain, fill, inside, outside
+  quality: 75,     // 省略则沿用 sharp 对该扩展名的默认编码
+  format: 'webp'
 });
+
+console.log(resized.width, resized.height, resized.resized);
 ```
 
 #### 批量压缩目录
