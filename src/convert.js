@@ -1,7 +1,7 @@
 import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
-import { compressImageMaxSize, losslessNoteFor } from './compress.js';
+import { compressImageMaxSize, losslessNoteFor, applyMeta } from './compress.js';
 
 /**
  * 图片格式转换
@@ -14,7 +14,7 @@ import { compressImageMaxSize, losslessNoteFor } from './compress.js';
  * @param {number} [options.maxSize] - 目标体积（字节），指定后二分搜索最高质量使产物 ≤ 该体积
  */
 export async function convertImage(inputPath, outputPath, options = {}) {
-  const { format, quality = 80, lossless = false, maxSize } = options;
+  const { format, quality = 80, lossless = false, maxSize, keepMetadata = true, rotateExif = false } = options;
   
   // 确保输出目录存在
   const outputDir = path.dirname(outputPath);
@@ -27,7 +27,7 @@ export async function convertImage(inputPath, outputPath, options = {}) {
   
   // 目标体积优先：二分搜索最高质量使产物 ≤ maxSize
   if (maxSize && maxSize > 0 && !lossless) {
-    const res = await compressImageMaxSize(inputPath, outputPath, { format: targetFormat, targetBytes: maxSize, lossless });
+    const res = await compressImageMaxSize(inputPath, outputPath, { format: targetFormat, targetBytes: maxSize, lossless, keepMetadata, rotateExif });
     return {
       input: inputPath,
       output: outputPath,
@@ -40,7 +40,7 @@ export async function convertImage(inputPath, outputPath, options = {}) {
     };
   }
   
-  let pipeline = sharp(inputPath);
+  let pipeline = applyMeta(sharp(inputPath), { keepMetadata, rotateExif });
   
   switch (targetFormat) {
     case 'jpeg':

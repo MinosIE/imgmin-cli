@@ -21,6 +21,26 @@ test('compressImage: 按输出扩展名推断格式并落盘', async () => {
   assert.equal(meta.format, 'webp');
 });
 
+test('compressImage: 默认保留元数据，keepMetadata=false(--strip) 移除元数据', async () => {
+  const dir = makeTempDir();
+  const src = path.join(dir, 'src.jpg');
+  // 源图嵌入 density=300 元数据
+  await sharp({ create: { width: 64, height: 64, channels: 3, background: { r: 9, g: 18, b: 27 } } })
+    .withMetadata({ density: 300 })
+    .jpeg()
+    .toFile(src);
+
+  const outKeep = path.join(dir, 'keep.jpg');
+  const outStrip = path.join(dir, 'strip.jpg');
+  await compressImage(src, outKeep, { quality: 80, format: 'jpeg' });
+  await compressImage(src, outStrip, { quality: 80, format: 'jpeg', keepMetadata: false });
+
+  const mKeep = await readMetadata(outKeep);
+  const mStrip = await readMetadata(outStrip);
+  assert.equal(mKeep.density, 300, 'keepMetadata 应保留 density');
+  assert.notEqual(mStrip.density, 300, 'keepMetadata=false 应移除 density');
+});
+
 test('compressImage: 自动创建不存在的输出目录', async () => {
   const dir = makeTempDir();
   const src = await createNoisyImage(path.join(dir, 'src.jpg'));

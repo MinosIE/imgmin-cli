@@ -50,6 +50,8 @@ app.post('/api/compress', upload.array('images', 50), async (req, res) => {
     const metric = req.body.metric || 'ssim';
     const lossless = req.body.lossless === '1';
     const maxSize = req.body.maxSize ? parseSizeToBytes(req.body.maxSize) : undefined;
+    const keepMetadata = !req.body.strip;
+    const rotateExif = req.body.rotateExif === '1';
 
     // Support both single format string and formats[] array
     let formats = [];
@@ -82,7 +84,9 @@ app.post('/api/compress', upload.array('images', 50), async (req, res) => {
           const baseName = path.basename(file.originalname, path.extname(file.originalname));
           const outputPath = path.join(outputDir, `${baseName}_${Date.now()}.${ext}`);
 
-          await compressImage(file.path, outputPath, { quality: sugg.quality, format: ext, lossless, maxSize });
+          const comp = await compressImage(file.path, outputPath, { quality: sugg.quality, format: ext, lossless, maxSize, keepMetadata, rotateExif });
+          // 无损 / 目标体积命中时以实际生效质量为准，避免展示与产物不一致
+          const effectiveQuality = comp.quality ?? sugg.quality;
 
           const originalSize = fs.statSync(file.path).size;
           const compressedSize = fs.statSync(outputPath).size;
@@ -99,7 +103,7 @@ app.post('/api/compress', upload.array('images', 50), async (req, res) => {
               smart: true,
               keptOriginal: true,
               format: sourceExt,
-              quality: sugg.quality,
+              quality: effectiveQuality,
               reason: sugg.reason,
               qualityMetric: sugg.qualityMetric,
               qualityScore: sugg.qualityScore,
@@ -117,7 +121,7 @@ app.post('/api/compress', upload.array('images', 50), async (req, res) => {
               success: true,
               smart: true,
               format: ext,
-              quality: sugg.quality,
+              quality: effectiveQuality,
               reason: sugg.reason,
               qualityMetric: sugg.qualityMetric,
               qualityScore: sugg.qualityScore,
@@ -145,7 +149,9 @@ app.post('/api/compress', upload.array('images', 50), async (req, res) => {
                 quality: parseInt(quality),
                 format: ext,
                 lossless,
-                maxSize
+                maxSize,
+                keepMetadata,
+                rotateExif
               });
 
               const originalSize = result.originalSize;

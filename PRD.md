@@ -197,6 +197,7 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 ### 6.3 一体化 `smartSuggest`
 - `analyzeImage` + `findOptimalQuality` → `{...analysis, quality, qualityMetric, qualityScore, compressedSize, savedPercent}`。
 - 双入口：CLI（`smart` 命令、`compress --smart`）；Web（`/api/smart-analyze`、`/api/compress` 的 `smart=1`）。
+- **与无损 / 目标体积互斥（Web UI）**：智能模式已接管「格式 + 质量」决策，而 `--lossless`（忽略质量）与 `--max-size`（二分搜质量）同样决定质量，三者叠加会静默覆盖智能的自适应质量。故 Web 端开启智能模式时禁用并置灰「无损模式」与「目标体积」、自动关闭已开启的无损模式，并显示互斥提示条；提交时对 `lossless` / `maxSize` 增加 `!smart` 守卫。结果卡片回显 `compressImage` 实际生效的 `quality`（无损 / 目标体积命中时以返回值为准）。「移除元数据」「按 EXIF 自动旋转」与智能模式正交，不受影响。
 
 ---
 
@@ -290,7 +291,8 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 | 中 | 体积 / 尺寸预算 `--max-size 200kb` | 无 | **已完成** | `compressImageMaxSize` 二分搜质量使产物 ≤ 目标体积（`200kb`/`1.5mb` 等单位经 `parseSizeToBytes` 解析）；CLI(默认/compress/webp/avif/convert/resize)与 UI(目标体积输入框，接 `/api/compress?maxSize=`)双入口；与 `--lossless` 互斥（无损优先，忽略 max-size） |
 | 中 | CI 友好输出 `--json` / `--dry-run` / `--quiet` | 无，只能解析彩色文本 | 未开始 | `--dry-run` 可与现有「跳过判定」逻辑复用，`--json` 需统一各命令结果结构 |
 | 中 | `imgmin ui --host 0.0.0.0` | 仅支持 `-p` | 未开始 | 容器 / 局域网场景；需同步 §7.1 与 `startUIServer` |
-| 中 | 元数据控制 `--strip` / EXIF 自动旋转 | 未显式处理 | 未开始 | 涉及 sharp `withMetadata()` / `rotate()`，会改变现有「压缩即丢元数据」的隐含行为 |
+| 中 | 元数据控制 `--strip` / EXIF 自动旋转 | 未显式处理 | **已完成** | 引擎新增 `applyMeta`（先 `rotate()` 后 `withMetadata()`）；`keepMetadata` 默认 `true`（保留 EXIF/IPTC/ICC/XMP），`--strip` 置 false；`--rotate-exif` 按 EXIF Orientation 转正并清方向标记；CLI(默认/compress/webp/avif/convert/resize)与 UI(移除元数据 / 按 EXIF 自动旋转开关)双入口 |
+| 中 | 高级编码 / 画质参数（`--progressive` / `--effort` / `--near-lossless` / `--flatten` / `--sharpen`） | sharp 对应编码与像素变换参数未暴露 | 未开始 | 规划与冲突分析见 §11.4；编码类复用 `applyEncoder`、像素变换类复用 `applyMeta` 收口 |
 | 低 | watch 增量模式 | 无 | 未开始 | 可结合 mtime + 内容 hash 跳过未变更文件 |
 | 低 | SVG 优化（svgo） | 当前被 sharp 栅格化，丢失矢量特性 | 未开始 | 需引入 svgo，并纳入 §5 输入格式说明 |
 | 低 | HEIC / HEIF 导入 | sharp 解码不支持 | 未开始 | 见 §5、§10；需额外解码依赖 |
@@ -316,6 +318,26 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 | 首批自动化测试 | 部分完成 | `tests/`（helpers + 6 个用例文件）；仍缺 Web API 测试 |
 | 文档同步 | 已完成 | README（resize / 并发 / 测试章节）、PRD（§4.8、§11、§13）、AGENTS.md（测试规范与踩坑） |
 
+### 11.4 高级编码与画质参数（待开发）· 冲突分析
+
+> 本节为**规划项（均未实现）**，用于在动工前锁定「与现有 `--lossless` / `--max-size` / `--strip` / `--rotate-exif` / 智能模式的相互作用」，避免实现时产生二义行为。
+> 复用点：编码类参数统一进 `applyEncoder(pipeline, format, quality, { lossless, keepMetadata, rotateExif, ... })`；像素变换类统一进 `applyMeta`。
+> 执行顺序约定：`rotate()`（EXIF 转正）→ 像素变换（flatten / sharpen）→ `withMetadata()`（元数据）→ 编码（quality / lossless / effort / progressive）。
+
+| 参数 | 作用 / 适用格式 | 与现有功能冲突判定 | 采用的处理规则（拟） |
+|---|---|---|---|
+| `--progressive` | 渐进式 / 交错：JPEG（`progressive`）、PNG（`progressive` / Adam7）、WebP 无此选项 | **无冲突**（与 `lossless`、`max-size` 正交） | 全程透传；`--max-size` 二分搜索的每次试编码与最终编码都携带该开关，保证收敛对象一致 |
+| `--effort <n>` | 编码耗时 ↔ 质量权衡：AVIF 0-9、WebP 0-6、PNG 0-10 | **无冲突** | 按目标格式校验并夹取范围；对不支持的格式忽略；WebP / AVIF 无损模式下同样接受 effort |
+| `--near-lossless [0-100]` | WebP 专用「近无损」预测 | **语义重叠**（与 `--lossless` 同属无损族，非硬冲突） | 仅对 WebP 生效，其它格式忽略并提示；与 `--lossless` 同时给出时以 near-lossless 为准；与 `--max-size` 沿用无损族规则（**忽略 max-size**）以消除二义 |
+| `--flatten [color]` | 去除 alpha 并按指定底色（默认 `#ffffff`）铺底；无 alpha 输入等价无效 | **与透明语义冲突**（PNG / WebP 透明将被丢弃） | 显式使用时在结果中提示「已移除透明」；智能模式开启时 `analyzeImage` 的 `hasAlpha` 分支让位于 flatten（按不透明处理）；与 `--strip`、`--lossless` 无直接冲突 |
+| `--sharpen [sigma]` | 锐化（USM）；适用于所有有损 / 无损输出 | **与 `--lossless` 硬冲突**（改变像素 → 相对原图不再无损） | 像素变换类与 `--lossless` 互斥：同时给出时以 `--lossless` 优先并忽略锐化（附提示），或 CLI 直接报错退出（实现时二选一，倾向「忽略 + 提示」）；与 SSIM 自适应质量搜索有交互（锐化会拉低相对原图的 SSIM，需按变换后基准比较或提示） |
+
+**通用结论**
+
+- **编码类（`--progressive` / `--effort`）**：与现有功能**不冲突**，可直接沿用 `lossless` / `maxSize` 的既有透传模式补齐（含 CLI 各命令与 UI）。
+- **语义类（`--near-lossless` / `--flatten` / `--sharpen`）**：**存在需要显式裁决的交集**——无损族归属、透明丢弃、像素变换 vs 无损；规则同上表，实现时必须同步 CLI 提示与 UI 开关的禁用 / 联动。
+- **通用像素变换（后续扩展）**：凡改变像素的参数（blur / normalize / modulate / tint 等）与本节的 `--sharpen` 同属「与 `--lossless` 互斥」一类，统一按同一规则处理。
+
 ---
 
 ## 12. 合规说明
@@ -327,6 +349,17 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 ---
 
 ## 13. 变更记录
+
+### 2026-09-14 · 智能模式与无损 / 目标体积互斥收口
+- 背景：智能模式做「选格式 + 自适应质量」，而 `--lossless`（忽略质量）、`--max-size`（二分搜质量）同样决定质量，叠加时会静默覆盖智能的自适应质量，且结果卡片回显的是建议质量而非实际产物质量。
+- Web UI（`ui-public/index.html`）：`syncEditableState` 收口——开启智能模式时禁用并置灰「无损模式」（`#losslessRow`）与「目标体积」（`#maxSizeBlock`）、自动关闭已开启的无损模式，显示互斥提示条（`#mutexNote`）；提交时 `lossless` / `maxSize` 加 `!smart` 守卫。
+- 结果回显（`src/ui.js`）：智能分支改为捕获 `compressImage` 返回值并回显实际生效质量（`quality: effectiveQuality`）。
+- 规则：智能模式与「无损模式」「目标体积」互斥（均决定质量）；「移除元数据」「按 EXIF 自动旋转」与智能模式正交，保持可用。
+
+### 2026-09-14 · PRD 增补「高级编码与画质参数」规划（未实现）
+- 新增 §11.4：对 `--progressive` / `--effort` / `--near-lossless` / `--flatten` / `--sharpen` 五项做冲突分析并锁定拟采用规则。
+- 结论：**编码类（`--progressive` / `--effort`）与现有功能不冲突**，可按 `--lossless` / `--max-size` 既有透传模式补齐；**语义类**（`--near-lossless` 与 `--lossless` 归属、`--flatten` 丢透明、`--sharpen` 与 `--lossless` 硬冲突）需显式裁决，规则已写入 §11.4。
+- §11.1 增补对应规划行（进度：未开始，指向 §11.4）。
 
 ### 2026-09-14 · resize / 并发 / 测试
 - **新增 `resize` 命令**（§4.8）：`-w/--width`、`--height`、`--fit`、`-q`、`-f`、`-r`、`-j`、`--force`；库层 `resizeImage` 扩展为支持 `quality` / `format` / `withoutEnlargement`，并返回 `resized` 与前后尺寸。
@@ -356,6 +389,11 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 - 新增 CLI 选项 `--max-size <size>`（默认 / compress / webp / avif / convert / resize），经 `parseSizeToBytes` 解析 `200kb` / `1.5mb` 等单位；引擎 `compressImageMaxSize` 二分搜索最高质量使产物 ≤ 目标体积。
 - UI 新增「目标体积」输入框，以 `maxSize` 接入 `/api/compress`；勾选「无损模式」时该输入框自动禁用（无损优先，忽略 max-size）。
 - 冲突规则：① `--lossless` 优先于 `--max-size`，同时传入时忽略 max-size；② JPEG 无原生无损，开启 `--lossless` 退回最高质量 q100，结果附 `losslessNote` 提示（CLI 黄色 ⚠、UI 橙色提示条）。
+
+### 2026-09-14 · 元数据控制 --strip / EXIF 自动旋转
+- 引擎新增 `applyMeta(pipeline, { keepMetadata, rotateExif })`：先 `rotate()`（按 EXIF Orientation 自动旋转像素，随后由 `withMetadata()` 清除方向标记避免二次旋转），再 `withMetadata()` 保留 EXIF/IPTC/ICC/XMP；在 `applyEncoder` 与各格式 handler（`compressImageToWebp`/`ToAvif`）及 `convertImage`/`resizeImage` 中统一套用。
+- CLI 新增 `--strip`（丢弃元数据，默认 `keepMetadata=true` 即保留）与 `--rotate-exif`（自动旋转），贯穿默认 / compress / webp / avif / convert / resize 全部命令及内部批量/单文件 helper；UI 新增「移除元数据」「按 EXIF 自动旋转」开关，经 `/api/compress` 的 `strip` / `rotateExif` 透传。
+- 改变旧行为：此前「压缩即丢元数据」为隐式，现默认保留元数据（与 `--strip` 形成显式控制）。
 
 ### 2026-09-14 · 进度可视化（第 11 节重构）
 - 第 11 节由「路线图（候选 / 当前未实现）」重构为「**能力缺口与路线图（含执行进度）**」：

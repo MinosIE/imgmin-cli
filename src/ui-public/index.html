@@ -127,12 +127,6 @@
       color: var(--accent);
     }
     .logo span { color: var(--text); font-weight: 400; }
-    .subtitle {
-      font-size: 13px;
-      color: var(--text-muted);
-      letter-spacing: 2px;
-      text-transform: uppercase;
-    }
 
     /* Theme toggle button */
     .theme-toggle {
@@ -219,18 +213,18 @@
 
     /* Settings panel */
     .settings-panel {
-      display: flex;
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
       gap: 16px;
       margin-top: 24px;
-      flex-wrap: wrap;
+      align-items: start;
     }
     .setting-group {
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: var(--radius-lg);
       padding: 20px;
-      flex: 1;
-      min-width: 200px;
+      min-width: 0;
     }
     .setting-label {
       font-family: var(--font-display);
@@ -353,6 +347,19 @@
       color: #f59e0b;
     }
     .maxsize-group { margin-top: 14px; }
+    .encode-divider { height: 1px; background: var(--border); margin: 16px 0; }
+    .encode-group .smart-toggle + .smart-toggle { margin-top: 12px; }
+    .row-disabled { opacity: 0.4; pointer-events: none; }
+    .mutex-note {
+      margin-bottom: 14px;
+      padding: 6px 12px;
+      background: var(--accent-glow);
+      border-left: 2px solid var(--accent);
+      border-radius: 4px;
+      font-size: 11.5px;
+      line-height: 1.5;
+      color: var(--accent);
+    }
     .setting-label { display: block; margin-bottom: 6px; }
     .setting-label strong { font-size: 13px; color: var(--text); }
     .setting-label small { display: block; margin-top: 3px; font-size: 11px; color: var(--text-muted); line-height: 1.5; }
@@ -533,7 +540,10 @@
     .quality-tip strong { color: var(--text-secondary); font-weight: 600; }
 
     /* Format selector */
-    #formatGroup { flex: 1.9; }
+    #formatGroup { grid-column: span 7; }
+    .quality-group { grid-column: span 5; }
+    .encode-group { grid-column: span 7; }
+    .smart-group { grid-column: span 5; }
     .format-options {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
@@ -1017,9 +1027,11 @@
     @media (max-width: 1100px) {
       .result-cards { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); }
     }
+    @media (max-width: 900px) {
+      #formatGroup, .quality-group, .encode-group, .smart-group { grid-column: span 12; }
+    }
     @media (max-width: 640px) {
       .app-container { padding: 16px 16px 48px; }
-      .settings-panel { flex-direction: column; }
       .format-options { grid-template-columns: repeat(2, 1fr); }
       .stats-summary { grid-template-columns: 1fr; }
       .result-cards { grid-template-columns: 1fr; }
@@ -1081,7 +1093,6 @@
   <div class="app-container">
     <header>
       <div class="logo">imgmin<span>.studio</span></div>
-      <div class="subtitle">图片优化</div>
       <button class="theme-toggle" id="themeToggle" title="切换明暗主题" aria-label="切换主题">🌙</button>
     </header>
 
@@ -1174,7 +1185,7 @@
         </div>
         <div class="format-count" id="formatCount">已选 1 种格式</div>
       </div>
-      <div class="setting-group">
+      <div class="setting-group quality-group">
         <div class="setting-label">质量</div>
         <div class="quality-display">
           <div class="quality-value" id="qualityValue">80</div>
@@ -1191,8 +1202,10 @@
         </div>
       </div>
 
-      <div class="setting-group lossless-group">
-        <label class="smart-toggle">
+      <div class="setting-group encode-group">
+        <div class="setting-label">编码选项</div>
+        <div class="mutex-note" id="mutexNote" style="display:none">智能模式已接管「格式 + 质量」决策，无损模式与目标体积不可用。</div>
+        <label class="smart-toggle" id="losslessRow">
           <input type="checkbox" id="losslessMode">
           <span class="smart-toggle-box"></span>
           <span class="smart-toggle-text">
@@ -1201,14 +1214,35 @@
           </span>
         </label>
         <div class="metric-desc" id="losslessDesc">无损编码会忽略质量滑块，保留全部像素信息（体积通常更大）。</div>
-      </div>
 
-      <div class="setting-group maxsize-group">
-        <label class="setting-label" for="maxSizeInput">
-          <strong>目标体积</strong>
-          <small>可选，如 200kb / 1.5mb；二分搜索最高质量使产物 ≤ 该体积（无损模式启用时忽略）</small>
+        <div class="encode-divider"></div>
+
+        <div class="maxsize-block" id="maxSizeBlock">
+          <label class="setting-label" for="maxSizeInput">
+            <strong>目标体积</strong>
+            <small>可选，如 200kb / 1.5mb；二分搜索最高质量使产物 ≤ 该体积（无损 / 智能模式下忽略）</small>
+          </label>
+          <input type="text" id="maxSizeInput" class="text-input" placeholder="例如 200kb" autocomplete="off">
+        </div>
+
+        <div class="encode-divider"></div>
+
+        <label class="smart-toggle">
+          <input type="checkbox" id="stripMeta">
+          <span class="smart-toggle-box"></span>
+          <span class="smart-toggle-text">
+            <strong>移除元数据</strong>
+            <small>该勾：发网页 / 社交 / 公开分享，想更小并隐藏 GPS、机型时。别勾：要留版权 / 拍摄参数 / HDR 色彩，或图靠方向标记摆正</small>
+          </span>
         </label>
-        <input type="text" id="maxSizeInput" class="text-input" placeholder="例如 200kb" autocomplete="off">
+        <label class="smart-toggle">
+          <input type="checkbox" id="rotateExif">
+          <span class="smart-toggle-box"></span>
+          <span class="smart-toggle-text">
+            <strong>按 EXIF 自动旋转</strong>
+            <small>该勾：手机竖拍图（方向标记摆正）或同时勾了「移除元数据」，避免转正后歪图。别勾：图已转正 / 方向不重要</small>
+          </span>
+        </label>
       </div>
 
       <div class="setting-group smart-group">
@@ -1273,6 +1307,8 @@
       metric: 'ssim',
       lossless: false,
       maxSize: '',
+      strip: false,
+      rotateExif: false,
       processing: false,
       zipping: false,
       results: []
@@ -1302,6 +1338,11 @@
     const losslessMode = document.getElementById('losslessMode');
     const losslessDesc = document.getElementById('losslessDesc');
     const maxSizeInput = document.getElementById('maxSizeInput');
+    const stripMeta = document.getElementById('stripMeta');
+    const rotateExifToggle = document.getElementById('rotateExif');
+    const losslessRow = document.getElementById('losslessRow');
+    const maxSizeBlock = document.getElementById('maxSizeBlock');
+    const mutexNote = document.getElementById('mutexNote');
     const METRIC_DESC = {};
     METRIC_DESC.ssim='SSIM：结构相似性，通用均衡';
     METRIC_DESC.butteraugli='Butteraugli：人眼感知差异，体积更小';
@@ -1417,18 +1458,34 @@
       updateQualityHint();
     });
 
-    // 依据 smart / lossless 同步「质量滑块」与「格式组」的可编辑状态
+    // 依据 smart / lossless 同步「质量滑块 / 格式组 / 无损 / 目标体积」的可编辑状态
     function syncEditableState() {
       const lockQuality = state.smart || state.lossless;
       qualitySlider.disabled = lockQuality;
       qualitySlider.parentElement.parentElement.classList.toggle('dimmed', lockQuality);
+
+      // 智能模式接管「格式 + 质量」决策 → 与无损模式互斥，开启智能时关闭无损
+      if (state.smart && state.lossless) {
+        state.lossless = false;
+        losslessMode.checked = false;
+      }
       // 智能模式才锁定格式选择；无损模式仍允许选目标格式
       formatGroup.classList.toggle('disabled-overlay', state.smart);
-      losslessDesc.textContent = state.lossless
-        ? '无损编码已开启：忽略质量滑块，保留全部像素（体积通常更大）。'
-        : '无损编码会忽略质量滑块，保留全部像素信息（体积通常更大）。';
-      // 无损模式启用时目标体积被忽略，禁用输入框
-      if (maxSizeInput) maxSizeInput.disabled = state.lossless;
+      losslessMode.disabled = state.smart;
+      losslessRow.classList.toggle('row-disabled', state.smart);
+      losslessDesc.textContent = state.smart
+        ? '智能模式已接管格式与质量决策，无损模式不可用。'
+        : state.lossless
+          ? '无损编码已开启：忽略质量滑块，保留全部像素（体积通常更大）。'
+          : '无损编码会忽略质量滑块，保留全部像素信息（体积通常更大）。';
+
+      // 目标体积：无损模式或智能模式下被忽略 → 禁用输入
+      const maxSizeLocked = state.lossless || state.smart;
+      if (maxSizeInput) maxSizeInput.disabled = maxSizeLocked;
+      if (maxSizeBlock) maxSizeBlock.classList.toggle('row-disabled', maxSizeLocked);
+
+      // 智能模式互斥提示
+      if (mutexNote) mutexNote.style.display = state.smart ? 'block' : 'none';
     }
 
     // Smart mode toggle
@@ -1446,6 +1503,12 @@
     });
     maxSizeInput.addEventListener('input', () => {
       state.maxSize = maxSizeInput.value.trim();
+    });
+    stripMeta.addEventListener('change', () => {
+      state.strip = stripMeta.checked;
+    });
+    rotateExifToggle.addEventListener('change', () => {
+      state.rotateExif = rotateExifToggle.checked;
     });
     metricSelect.addEventListener('change', () => {
       state.metric = metricSelect.value;
@@ -1753,11 +1816,17 @@
         state.formats.forEach(fmt => formData.append('formats', fmt));
         formData.append('quality', state.quality);
       }
-      if (state.lossless) {
+      if (state.lossless && !state.smart) {
         formData.append('lossless', '1');
       }
-      if (state.maxSize) {
+      if (state.maxSize && !state.smart && !state.lossless) {
         formData.append('maxSize', state.maxSize);
+      }
+      if (state.strip) {
+        formData.append('strip', '1');
+      }
+      if (state.rotateExif) {
+        formData.append('rotateExif', '1');
       }
 
       try {
