@@ -297,6 +297,8 @@ export async function smartSuggest(inputPath, opts = {}) {
     qualityMetric: qualityResult.metric,
     qualityScore: qualityResult.score,
     compressedSize: qualityResult.compressedSize,
+    // originalSize 与 findOptimalQuality 的返回字段保持一致；size 为 analyzeImage 的原始字段（保留兼容）
+    originalSize: qualityResult.originalSize,
     savedPercent: qualityResult.savedPercent,
   };
 }

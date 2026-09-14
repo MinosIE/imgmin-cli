@@ -10,6 +10,22 @@ const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.tiff', '.t
  * @param {Object} options - 选项
  * @returns {Promise<string[]>} 匹配的文件列表
  */
+/**
+ * 解析 glob 中的扩展名片段，支持 `.{jpg,png}` 与 `.png` 两种写法
+ * @param {string} extPart - 形如 `.{jpg,png}` / `.png` / `{jpg,png}`
+ * @returns {string[]} 小写、不带点的扩展名数组
+ */
+function parseExtensions(extPart = '') {
+  const braceMatch = extPart.match(/^\.?\{(.+)\}$/);
+  if (braceMatch) {
+    return braceMatch[1]
+      .split(',')
+      .map(e => e.trim().toLowerCase().replace(/^\./, ''))
+      .filter(Boolean);
+  }
+  return [extPart.replace(/^\./, '').toLowerCase()].filter(Boolean);
+}
+
 export async function glob(pattern, options = {}) {
   const files = [];
   const { nodir = true } = options;
@@ -21,23 +37,13 @@ export async function glob(pattern, options = {}) {
   
   // 检查是否是递归模式 img/**/*.{ext1,ext2}
   if (pattern.includes('/**/*')) {
-    const parts = pattern.split('/**/*');
-    baseDir = parts[0];
-    const extPart = parts[1];
-    
-    // 提取 {ext1,ext2,...} 格式，如 .{jpg,png}
-    const braceMatch = extPart.match(/^\.\{(.+)\}$/);
-    if (braceMatch) {
-      extensions = braceMatch[1].split(',').map(e => e.toLowerCase());
-    } else {
-      // 单扩展名如 .png
-      extensions = [extPart.startsWith('.') ? extPart.slice(1) : extPart];
-    }
+    baseDir = pattern.split('/**/*')[0];
+    extensions = parseExtensions(pattern.split('/**/*')[1]);
   } else if (pattern.includes('/*.')) {
-    // 非递归模式 img/*.png
+    // 非递归模式 img/*.png 或 img/*.{jpg,png}
     const parts = pattern.split('/*.');
     baseDir = parts[0];
-    extensions = [parts[1].toLowerCase()];
+    extensions = parseExtensions(parts[1]);
     recursive = false;
   }
   
