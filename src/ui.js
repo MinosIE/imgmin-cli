@@ -292,6 +292,7 @@ app.post('/api/smart-analyze', async (req, res) => {
       return res.status(400).json({ error: 'files array required' });
     }
     const thresholdNum = threshold ? parseFloat(threshold) : undefined;
+    const outputDir = path.join(os.tmpdir(), 'imgmin-ui-output');
 
     const suggestions = [];
     for (const filename of files) {
@@ -403,16 +404,18 @@ export async function startUIServer(port = 3000) {
       console.log(`  Press Ctrl+C to stop\n`);
       console.log(`  TIP: Keep this terminal window open while using the UI.\n`);
 
-      // Try to open browser
-      const platform = os.platform();
-      let command;
-      if (platform === 'darwin') command = `open http://localhost:${actualPort}`;
-      else if (platform === 'win32') command = `start http://localhost:${actualPort}`;
-      else command = `xdg-open http://localhost:${actualPort}`;
+      // Try to open browser（IMGMIN_NO_BROWSER=1 时跳过，便于测试 / CI）
+      if (process.env.IMGMIN_NO_BROWSER !== '1') {
+        const platform = os.platform();
+        let command;
+        if (platform === 'darwin') command = `open http://localhost:${actualPort}`;
+        else if (platform === 'win32') command = `start http://localhost:${actualPort}`;
+        else command = `xdg-open http://localhost:${actualPort}`;
 
-      exec(command, (err) => {
-        if (err) console.log(`  Could not auto-open browser. Visit: http://localhost:${actualPort}\n`);
-      });
+        exec(command, (err) => {
+          if (err) console.log(`  Could not auto-open browser. Visit: http://localhost:${actualPort}\n`);
+        });
+      }
 
       resolve(server);
     });
