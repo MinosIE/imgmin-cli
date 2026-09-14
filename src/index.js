@@ -6,6 +6,7 @@ import { convertImage } from './convert.js';
 import { getImageInfo, glob, formatFileSize, batchProcess } from './utils.js';
 import { getConfig, setConfigValue, resetConfigValue, resetConfig, getConfigPath, hasConfigFile } from './config.js';
 import { startUIServer } from './ui.js';
+import { smartSuggest, analyzeImage, findOptimalQuality } from './smart.js';
 import path from 'path';
 import fs from 'fs';
 
@@ -138,6 +139,9 @@ program
   .option('-f, --format <type>', 'Output format (jpeg, png, webp, avif, tiff, gif)')
   .option('--no-webp', 'Do not generate WebP versions')
   .option('--force', 'Replace original file with compressed version (no _compressed suffix)')
+  .option('--smart', 'Smart mode: content-aware format + adaptive quality (SSIM/Butteraugli)')
+  .option('--metric <type>', 'Quality metric for smart mode: ssim (default) or butteraugli')
+  .option('--threshold <number>', 'Quality threshold for smart mode (SSIM≥0.95 default, Butteraugli≤1.2 default)')
   .action(async (source, output, options) => {
     const config = getConfig();
     
@@ -149,6 +153,9 @@ program
     const format = options.format ?? config.format;
     const generateWebp = options.webp !== false; // 默认生成 webp
     const forceReplace = options.force || false;
+    const smart = options.smart || false;
+    const metric = options.metric || 'ssim';
+    const threshold = options.threshold ? parseFloat(options.threshold) : undefined;
     
     const spinner = ora('Processing...').start();
     
@@ -157,7 +164,7 @@ program
       
       if (stats.isDirectory()) {
         spinner.text = 'Processing directory...';
-        const results = await processDirectory(sourcePath, output, { quality, recursive, format, generateWebp, forceReplace }, spinner);
+        const results = await processDirectory(sourcePath, output, { quality, recursive, format, generateWebp, forceReplace, smart, metric, threshold }, spinner);
         
         if (results.success === 0 && results.failed === 0 && results.skipped === 0) {
           spinner.stop();
@@ -179,7 +186,7 @@ program
           console.log(chalk.red(`✗ Failed: ${results.failed} files`));
         }
       } else {
-        const result = await compressSingleFile(sourcePath, output, { quality, format, generateWebp, forceReplace });
+        const result = await compressSingleFile(sourcePath, output, { quality, format, generateWebp, forceReplace, smart, metric, threshold });
         if (result.skipped) {
           spinner.stop();
           console.log(chalk.yellow(`\n⚠ Skipped: ${result.message}`));
@@ -197,6 +204,38 @@ program
       }
     } catch (error) {
       spinner.fail(chalk.red(`\n✗ Error: ${error.message}`));
+    }
+  });
+
+// 智能分析命令：仅分析不压缩，输出推荐格式/质量/理由
+program
+  .command('smart <source>')
+  .description('Analyze images and suggest content-aware format + adaptive quality (no compression)')
+  .option('-m, --metric <type>', 'Quality metric to use: ssim (default) or butteraugli')
+  .option('-t, --threshold <number>', 'Quality threshold (SSIM≥0.95 default, Butteraugli≤1.2 default)')
+  .action(async (source, options) => {
+    const metric = options.metric || 'ssim';
+    const threshold = options.threshold ? parseFloat(options.threshold) : undefined;
+
+    try {
+      const stats = fs.statSync(source);
+      const files = stats.isDirectory()
+        ? fs.readdirSync(source).filter(f => /\.(jpe?g|png|gif|webp|avif|tiff?|bmp)$/i.test(f))
+            .map(f => path.join(source, f))
+        : [source];
+
+      for (const file of files) {
+        const spinner = ora(`Analyzing ${path.basename(file)}...`).start();
+        const sugg = await smartSuggest(file, { metric, threshold });
+        spinner.succeed(chalk.green(` ${path.basename(file)}`));
+        console.log(chalk.cyan(`   📐 ${sugg.width}×${sugg.height}  alpha:${sugg.hasAlpha}  photo:${sugg.isPhoto}`));
+        console.log(chalk.cyan(`   🎯 format: ${sugg.format}   quality: Q${sugg.quality} (${sugg.qualityMetric} ${sugg.qualityScore})`));
+        console.log(chalk.gray(`   💡 ${sugg.reason}`));
+        console.log(chalk.green(`   📉 saved ~${sugg.savedPercent}%  (${formatFileSize(sugg.originalSize)} → ${formatFileSize(sugg.compressedSize)})`));
+        console.log('');
+      }
+    } catch (error) {
+      console.log(chalk.red(`\n✗ Error: ${error.message}`));
     }
   });
 
@@ -447,7 +486,7 @@ function generateUniqueOutputPath(originalPath, targetExt, processedFiles) {
 }
 
 async function processDirectory(sourceDir, outputDir, options, spinner) {
-  const { quality, recursive, format, generateWebp, forceReplace } = options;
+  const { quality, recursive, format, generateWebp, forceReplace, smart, metric, threshold } = options;
   const pattern = recursive 
     ? `${sourceDir}/**/*.{jpg,jpeg,png,gif,tiff,tif,bmp,svg,avif}`
     : `${sourceDir}/*.{jpg,jpeg,png,gif,tiff,tif,bmp,svg,avif}`;
@@ -521,11 +560,24 @@ async function processDirectory(sourceDir, outputDir, options, spinner) {
         const outExt = format ? `.${format}` : ext;
         outputPath = path.join(dirName, `${baseName}_compressed${outExt}`);
       }
-      
-      await compressImage(file, outputPath, {
-        quality: parseInt(quality),
-        format: format || undefined
-      });
+
+      // 智能模式：内容感知格式 + 自适应质量
+      if (smart) {
+        const sugg = await smartSuggest(file, { metric, threshold });
+        const outExt = `.${sugg.format}`;
+        outputPath = outputDir
+          ? path.join(outputDir, `${baseName}${outExt}`)
+          : forceReplace
+            ? path.join(dirName, `${baseName}_imgmin_tmp${outExt}`)
+            : path.join(dirName, `${baseName}_compressed${outExt}`);
+        await compressImage(file, outputPath, { quality: sugg.quality, format: sugg.format });
+        console.log(chalk.cyan(`  🧠 ${path.basename(file)} → ${sugg.format} Q${sugg.quality} (${sugg.reason})`));
+      } else {
+        await compressImage(file, outputPath, {
+          quality: parseInt(quality),
+          format: format || undefined
+        });
+      }
       
       // 检查压缩后文件大小，如果更大则跳过（仅适用于生成 _compressed 文件的场景）
       if (!forceReplace && !outputDir) {
@@ -657,10 +709,38 @@ async function processDirectoryToFormat(sourceDir, outputDir, format, options, s
 
 async function compressSingleFile(source, output, options) {
   const stats = fs.statSync(source);
-  const { quality, format, generateWebp, forceReplace } = options;
+  const { quality, format, generateWebp, forceReplace, smart, metric, threshold } = options;
   const ext = path.extname(source);
   const baseName = path.basename(source, ext);
   const dirName = path.dirname(source);
+
+  // 智能模式：内容感知选格式 + 自适应质量
+  if (smart) {
+    const sugg = await smartSuggest(source, { metric, threshold });
+    const targetFormat = sugg.format;
+    const targetQuality = sugg.quality;
+    const outExt = output ? path.extname(output) : `.${targetFormat}`;
+    let smartOutput = output || path.join(dirName, `${baseName}_compressed${outExt}`);
+
+    await compressImage(source, smartOutput, { quality: targetQuality, format: targetFormat });
+
+    const cs = fs.statSync(smartOutput).size;
+    const saved = ((stats.size - cs) / stats.size * 100).toFixed(1);
+    return {
+      success: true,
+      smart: true,
+      format: targetFormat,
+      quality: targetQuality,
+      reason: sugg.reason,
+      metric: sugg.qualityMetric,
+      score: sugg.qualityScore,
+      originalSize: stats.size,
+      compressedSize: cs,
+      savedPercent: `${saved}%`,
+      output: smartOutput,
+    };
+  }
+
   
   // 检查是否需要跳过
   if (!output && !forceReplace) {

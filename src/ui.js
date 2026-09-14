@@ -5,13 +5,36 @@ import fs from 'fs';
 import os from 'os';
 import { ZipArchive } from 'archiver';
 import { compressImage, compressImageToFormat } from './compress.js';
-import { getImageInfo, formatFileSize } from './utils.js';
+import { getImageInfo, formatFileSize, analyzeCompressibility } from './utils.js';
+import { smartSuggest } from './smart.js';
 
 const app = express();
 const upload = multer({ 
   dest: os.tmpdir(),
   limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
 });
+
+const JPEG_EXTS = new Set(['jpg', 'jpeg']);
+
+// jpg / jpeg 视为同一格式
+function sameFormat(a, b) {
+  if (!a || !b) return false;
+  if (JPEG_EXTS.has(a) && JPEG_EXTS.has(b)) return true;
+  return a === b;
+}
+
+/**
+ * 同格式重编码后反而变大时：丢弃产物，直接以原图作为该格式的结果。
+ * @returns {string} 保留后的文件路径
+ */
+function keepOriginalAsResult(srcPath, discardedPath, outputDir, baseName, ext) {
+  if (discardedPath) {
+    try { fs.unlinkSync(discardedPath); } catch {}
+  }
+  const keptPath = path.join(outputDir, `${baseName}_${Date.now()}_kept.${ext}`);
+  fs.copyFileSync(srcPath, keptPath);
+  return keptPath;
+}
 
 // Serve static files from ui-public
 app.use(express.static(path.join(import.meta.dirname, 'ui-public')));
@@ -22,6 +45,8 @@ app.post('/api/compress', upload.array('images', 50), async (req, res) => {
   try {
     const quality = parseInt(req.body.quality) || 80;
     const files = req.files;
+    const smart = req.body.smart === '1';
+    const metric = req.body.metric || 'ssim';
 
     // Support both single format string and formats[] array
     let formats = [];
@@ -44,49 +69,135 @@ app.post('/api/compress', upload.array('images', 50), async (req, res) => {
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
     for (const file of files) {
-      for (const fmt of formats) {
-        try {
-          const ext = fmt === 'original' 
-            ? path.extname(file.originalname).toLowerCase().replace('.', '')
-            : fmt;
+      try {
+        const sourceExt = path.extname(file.originalname).toLowerCase().replace('.', '');
+
+        if (smart) {
+          // Smart mode: content-aware format + adaptive quality
+          const sugg = await smartSuggest(file.path, { metric });
+          const ext = sugg.format;
           const baseName = path.basename(file.originalname, path.extname(file.originalname));
           const outputPath = path.join(outputDir, `${baseName}_${Date.now()}.${ext}`);
 
-          const result = await compressImage(file.path, outputPath, { 
-            quality: parseInt(quality), 
-            format: ext 
-          });
+          await compressImage(file.path, outputPath, { quality: sugg.quality, format: ext });
 
-          const originalSize = result.originalSize;
-          const compressedSize = result.compressedSize;
+          const originalSize = fs.statSync(file.path).size;
+          const compressedSize = fs.statSync(outputPath).size;
           const savedPercent = ((originalSize - compressedSize) / originalSize * 100).toFixed(1);
 
-          // Get image dimensions for preview
           const sharp = (await import('sharp')).default;
           const metadata = await sharp(outputPath).metadata();
 
-          results.push({
-            success: true,
-            originalName: file.originalname,
-            originalSize,
-            compressedSize,
-            savedPercent,
-            format: ext,
-            width: metadata.width,
-            height: metadata.height,
-            outputPath,
-            downloadUrl: `/api/download/${path.basename(outputPath)}`
-          });
-        } catch (err) {
-          results.push({ 
-            success: false, 
-            originalName: file.originalname, 
-            format: fmt,
-            error: err.message 
-          });
+          // 同格式重编码却没变小时，保留原图，避免「压缩后反而更大」
+          if (sameFormat(ext, sourceExt) && compressedSize >= originalSize) {
+            const keptPath = keepOriginalAsResult(file.path, outputPath, outputDir, baseName, sourceExt);
+            results.push({
+              success: true,
+              smart: true,
+              keptOriginal: true,
+              format: sourceExt,
+              quality: sugg.quality,
+              reason: sugg.reason,
+              qualityMetric: sugg.qualityMetric,
+              qualityScore: sugg.qualityScore,
+              originalName: file.originalname,
+              originalSize,
+              compressedSize: originalSize,
+              savedPercent: '0.0',
+              width: metadata.width,
+              height: metadata.height,
+              outputPath: keptPath,
+              downloadUrl: `/api/download/${path.basename(keptPath)}`
+            });
+          } else {
+            results.push({
+              success: true,
+              smart: true,
+              format: ext,
+              quality: sugg.quality,
+              reason: sugg.reason,
+              qualityMetric: sugg.qualityMetric,
+              qualityScore: sugg.qualityScore,
+              originalName: file.originalname,
+              originalSize,
+              compressedSize,
+              savedPercent,
+              width: metadata.width,
+              height: metadata.height,
+              outputPath,
+              downloadUrl: `/api/download/${path.basename(outputPath)}`
+            });
+          }
+        } else {
+          for (const fmt of formats) {
+            try {
+              const ext = fmt === 'original'
+                ? path.extname(file.originalname).toLowerCase().replace('.', '')
+                : fmt;
+              const baseName = path.basename(file.originalname, path.extname(file.originalname));
+              const outputPath = path.join(outputDir, `${baseName}_${Date.now()}.${ext}`);
+
+              const result = await compressImage(file.path, outputPath, {
+                quality: parseInt(quality),
+                format: ext
+              });
+
+              const originalSize = result.originalSize;
+              const compressedSize = result.compressedSize;
+              const savedPercent = ((originalSize - compressedSize) / originalSize * 100).toFixed(1);
+
+              // Get image dimensions for preview
+              const sharp = (await import('sharp')).default;
+              const metadata = await sharp(outputPath).metadata();
+
+              // 同格式重编码却没变小时，保留原图，避免「压缩后反而更大」
+              if (sameFormat(ext, sourceExt) && compressedSize >= originalSize) {
+                const keptPath = keepOriginalAsResult(file.path, outputPath, outputDir, baseName, sourceExt);
+                results.push({
+                  success: true,
+                  keptOriginal: true,
+                  originalName: file.originalname,
+                  originalSize,
+                  compressedSize: originalSize,
+                  savedPercent: '0.0',
+                  format: sourceExt,
+                  width: metadata.width,
+                  height: metadata.height,
+                  outputPath: keptPath,
+                  downloadUrl: `/api/download/${path.basename(keptPath)}`
+                });
+              } else {
+                results.push({
+                  success: true,
+                  originalName: file.originalname,
+                  originalSize,
+                  compressedSize,
+                  savedPercent,
+                  format: ext,
+                  width: metadata.width,
+                  height: metadata.height,
+                  outputPath,
+                  downloadUrl: `/api/download/${path.basename(outputPath)}`
+                });
+              }
+            } catch (err) {
+              results.push({
+                success: false,
+                originalName: file.originalname,
+                format: fmt,
+                error: err.message
+              });
+            }
+          }
         }
+      } catch (err) {
+        results.push({
+          success: false,
+          originalName: file.originalname,
+          error: err.message
+        });
       }
-      // Clean up uploaded temp file (after all formats processed)
+      // Clean up uploaded temp file
       try { fs.unlinkSync(file.path); } catch {}
     }
 
@@ -107,6 +218,8 @@ app.post('/api/info', upload.single('image'), async (req, res) => {
 
     const info = await getImageInfo(file.path);
     try { fs.unlinkSync(file.path); } catch {}
+    // 压缩潜力分析：评估原图还能不能继续压
+    info.analysis = analyzeCompressibility(info);
     res.json(info);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -168,6 +281,51 @@ app.post('/api/download-zip', (req, res) => {
   } catch (err) {
     console.error('Download-zip error:', err);
     if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// Smart analyze endpoint: content-aware format + adaptive quality
+app.post('/api/smart-analyze', async (req, res) => {
+  try {
+    const { files, metric = 'ssim', threshold } = req.body || {};
+    if (!Array.isArray(files) || files.length === 0) {
+      return res.status(400).json({ error: 'files array required' });
+    }
+    const thresholdNum = threshold ? parseFloat(threshold) : undefined;
+
+    const suggestions = [];
+    for (const filename of files) {
+      const filePath = path.join(outputDir, path.basename(filename));
+      if (!fs.existsSync(filePath)) {
+        suggestions.push({ filename, error: 'File not found' });
+        continue;
+      }
+      try {
+        const sugg = await smartSuggest(filePath, { metric, threshold: thresholdNum });
+        suggestions.push({
+          filename,
+          format: sugg.format,
+          reason: sugg.reason,
+          quality: sugg.quality,
+          qualityMetric: sugg.qualityMetric,
+          qualityScore: sugg.qualityScore,
+          hasAlpha: sugg.hasAlpha,
+          isPhoto: sugg.isPhoto,
+          width: sugg.width,
+          height: sugg.height,
+          originalSize: sugg.size,
+          compressedSize: sugg.compressedSize,
+          savedPercent: sugg.savedPercent,
+        });
+      } catch (e) {
+        suggestions.push({ filename, error: e.message });
+      }
+    }
+
+    res.json({ suggestions });
+  } catch (err) {
+    console.error('Smart-analyze error:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
