@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>imgmin — Image Optimization Studio</title>
+  <title>imgmin — 图片优化工作室</title>
+  <link rel="icon" href="/favicon.ico">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -39,6 +40,31 @@
       --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       --font-display: 'Outfit', sans-serif;
       --font-body: 'DM Sans', sans-serif;
+    }
+
+    /* Light theme (黑白切换) */
+    [data-theme="light"] {
+      --bg-deep: #f4f4f7;
+      --bg: #ffffff;
+      --bg-card: #ffffff;
+      --bg-card-hover: #f1f1f5;
+      --bg-elevated: #ececf2;
+      --border: #e2e2ea;
+      --border-light: #d2d2dc;
+      --text: #1a1a20;
+      --text-secondary: #5f5f70;
+      --text-muted: #9a9aac;
+      --accent: #c9851a;
+      --accent-glow: rgba(201,133,26,0.12);
+      --accent-dim: #a06d12;
+      --success: #1a9e52;
+      --success-glow: rgba(26,158,82,0.10);
+      --error: #d23a3a;
+      --error-glow: rgba(210,58,58,0.10);
+      --warning: #c9851a;
+      --shadow-sm: 0 2px 8px rgba(0,0,0,0.06);
+      --shadow: 0 4px 16px rgba(0,0,0,0.08);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
     }
 
     html { font-size: 16px; }
@@ -81,7 +107,7 @@
     .app-container {
       position: relative;
       z-index: 1;
-      max-width: 1280px;
+      max-width: 1440px;
       margin: 0 auto;
       padding: 32px 24px 64px;
     }
@@ -106,6 +132,29 @@
       color: var(--text-muted);
       letter-spacing: 2px;
       text-transform: uppercase;
+    }
+
+    /* Theme toggle button */
+    .theme-toggle {
+      margin-left: auto;
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      border-radius: 50%;
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text);
+      transition: all var(--transition);
+    }
+    .theme-toggle:hover {
+      border-color: var(--accent);
+      background: var(--bg-card-hover);
+      transform: scale(1.05);
     }
 
     /* Drop zone */
@@ -193,7 +242,272 @@
       margin-bottom: 12px;
     }
 
+    /* Smart mode toggle */
+    .smart-toggle {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .smart-toggle input { display: none; }
+    .smart-toggle-box {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--border-light);
+      border-radius: 6px;
+      margin-top: 2px;
+      position: relative;
+      transition: all 0.2s;
+    }
+    .smart-toggle input:checked + .smart-toggle-box {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .smart-toggle input:checked + .smart-toggle-box::after {
+      content: '✓';
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 12px;
+      font-weight: bold;
+    }
+    .smart-toggle-text { display: flex; flex-direction: column; line-height: 1.3; }
+    .smart-toggle-text strong { font-size: 14px; color: var(--text); }
+    .smart-toggle-text small { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .smart-options { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+    .metric-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .metric-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+    .metric-select {
+      appearance: none;
+      -webkit-appearance: none;
+      min-width: 128px;
+      background-color: var(--bg-elevated);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 9px center;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      padding: 7px 28px 7px 10px;
+      font-size: 13px;
+      font-family: inherit;
+      line-height: 1.2;
+      cursor: pointer;
+      transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
+    }
+    .metric-select:hover { border-color: var(--text-muted); }
+    .metric-select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(232, 168, 50, 0.18);
+    }
+
+    /* Disabled overlay when smart mode active */
+    .disabled-overlay { opacity: 0.4; pointer-events: none; filter: grayscale(0.5); }
+    .dimmed { opacity: 0.4; pointer-events: none; }
+    .smart-note {
+      margin-top: 10px;
+      padding: 7px 12px;
+      background: var(--accent-glow);
+      border-left: 2px solid var(--accent);
+      border-radius: 4px;
+      font-size: 11.5px;
+      line-height: 1.5;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .smart-note-reason { min-width: 0; }
+    .smart-note-meta {
+      color: var(--text-muted);
+      white-space: nowrap;
+      flex-shrink: 0;
+      font-variant-numeric: tabular-nums;
+    }
+    .metric-desc {
+      margin-top: 12px;
+      padding: 5px 0 5px 10px;
+      border-left: 2px solid var(--accent);
+      border-radius: 2px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text-muted);
+    }
+
+    /* Single-image analysis (now rendered below the drop zone, styled via .analysis-below) */
+    .drop-default { display: block; }
+    .drop-analysis {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      text-align: left;
+      animation: fade-in 0.3s ease-out both;
+    }
+    .drop-thumb {
+      width: 96px; height: 96px;
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--bg-elevated);
+      flex-shrink: 0;
+    }
+    .drop-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .drop-info { flex: 1; min-width: 0; }
+    .drop-info-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .analysis-fmt {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 16px;
+      color: var(--text);
+    }
+    .analysis-level {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+    }
+    .analysis-level.aggressive { color: var(--error); background: var(--error-glow); }
+    .analysis-level.moderate   { color: var(--warning); background: var(--accent-glow); }
+    .analysis-level.ok         { color: var(--success); background: var(--success-glow); }
+    .analysis-level.high       { color: var(--success); background: var(--success-glow); }
+    .analysis-level.lossless   { color: var(--accent); background: var(--accent-glow); }
+    .analysis-level.unknown    { color: var(--text-muted); background: var(--bg-elevated); }
+    .drop-info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 14px 22px;
+      margin-bottom: 0;
+    }
+    /* 左：指标网格 / 右：说明、建议与操作按钮，填满右侧空白 */
+    .da-body {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+      gap: 18px 28px;
+      align-items: start;
+    }
+    .da-side {
+      display: flex; flex-direction: column; align-items: flex-start;
+      gap: 6px; min-width: 0;
+    }
+    .da-side .analysis-rec { margin-top: 0; }
+    .da-side .btn-sm.primary { margin-top: 6px; }
+    @media (max-width: 760px) {
+      .da-body { grid-template-columns: 1fr; }
+    }
+    .drop-info-grid .k {
+      display: block;
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 3px;
+    }
+    .drop-info-grid .v {
+      font-family: var(--font-display);
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .analysis-note {
+      font-size: 12.5px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+    .analysis-rec {
+      margin-top: 6px;
+      font-size: 12.5px;
+      line-height: 1.5;
+      color: var(--text);
+    }
+    .analysis-rec strong { color: var(--accent); font-weight: 600; }
+    .drop-analysis .btn-sm.primary { margin-top: 12px; }
+
+    /* Uploaded files / analysis panel (rendered below the drop zone) */
+    .da-single { position: relative; display: flex; gap: 20px; align-items: flex-start; }
+    .da-name {
+      font-size: 14px; font-weight: 500; color: var(--text-primary);
+      margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .da-del {
+      flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px;
+      border: 1px solid var(--border-light); background: transparent;
+      color: var(--text-secondary); cursor: pointer; font-size: 18px; line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+      transition: color var(--transition), border-color var(--transition), background var(--transition);
+    }
+    .da-del:hover { color: #ff5b5b; border-color: #ff5b5b; background: rgba(255,91,91,0.10); }
+    .da-files { display: flex; flex-direction: column; gap: 10px; }
+    .file-item {
+      display: flex; align-items: center; gap: 14px;
+      padding: 10px 12px; background: var(--bg-elevated);
+      border: 1px solid var(--border-light); border-radius: var(--radius);
+      transition: border-color var(--transition), background var(--transition);
+    }
+    .file-item:hover { border-color: var(--accent); background: var(--bg-card-hover); }
+    .fi-thumb {
+      width: 44px; height: 44px; border-radius: 8px; overflow: hidden;
+      flex-shrink: 0; background: var(--bg-card);
+    }
+    .fi-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .fi-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .fi-name {
+      font-size: 14px; font-weight: 500; color: var(--text-primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .fi-size { font-size: 12px; color: var(--text-secondary); }
+    .fi-del {
+      flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px;
+      border: 1px solid var(--border-light); background: transparent;
+      color: var(--text-secondary); cursor: pointer; font-size: 18px; line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+      transition: color var(--transition), border-color var(--transition), background var(--transition);
+    }
+    .fi-del:hover { color: #ff5b5b; border-color: #ff5b5b; background: rgba(255,91,91,0.10); }
+
+    /* Single-image analysis card shown below the drop zone */
+    .analysis-below {
+      display: block; /* 覆盖 .drop-analysis 的 flex 行布局，使子块竖向堆叠并占满宽度 */
+      margin-top: 16px; padding: 22px 26px; text-align: left;
+      background: var(--bg-card); border: 1px solid var(--border-light);
+      border-radius: var(--radius); animation: fade-in 0.3s ease-out both;
+    }
+
+    /* Persistent quality tip */
+    .quality-tip {
+      margin-top: 12px;
+      font-size: 11.5px;
+      line-height: 1.5;
+      color: var(--text-muted);
+    }
+    .quality-tip strong { color: var(--text-secondary); font-weight: 600; }
+
     /* Format selector */
+    #formatGroup { flex: 1.9; }
     .format-options {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
@@ -203,7 +517,7 @@
       background: var(--bg-elevated);
       border: 2px solid var(--border);
       border-radius: var(--radius);
-      padding: 12px 8px;
+      padding: 14px 10px 12px;
       text-align: center;
       cursor: pointer;
       transition: all var(--transition);
@@ -221,7 +535,7 @@
     }
     .format-check {
       position: absolute;
-      top: 6px; right: 6px;
+      top: -7px; right: -7px;
       width: 18px; height: 18px;
       border-radius: 50%;
       background: var(--accent);
@@ -231,6 +545,8 @@
       font-size: 10px;
       color: #0a0a0c;
       font-weight: 700;
+      box-shadow: 0 0 0 2px var(--bg-card);
+      z-index: 2;
       opacity: 0;
       transform: scale(0.5);
       transition: all var(--transition);
@@ -417,7 +733,11 @@
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 16px;
+      padding: 16px 18px;
+      min-height: 96px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
       text-align: center;
     }
     .stat-card.accent {
@@ -427,6 +747,10 @@
     .stat-card.success {
       border-color: rgba(50,216,120,0.3);
       background: linear-gradient(135deg, var(--bg-card), var(--success-glow));
+    }
+    .stat-card.warn {
+      border-color: rgba(232,72,72,0.3);
+      background: linear-gradient(135deg, var(--bg-card), var(--error-glow));
     }
     .stat-label {
       font-size: 11px;
@@ -439,25 +763,35 @@
       font-family: var(--font-display);
       font-size: 24px;
       font-weight: 700;
+      line-height: 1.15;
       color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-sub {
+      margin-top: 4px;
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
     }
     .stat-card.accent .stat-value { color: var(--accent); }
     .stat-card.success .stat-value { color: var(--success); }
+    .stat-card.warn .stat-value { color: var(--error); }
 
     /* Result cards */
     .result-cards {
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: 1fr;
       gap: 12px;
     }
     .result-card {
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: var(--radius-lg);
-      padding: 16px;
+      padding: 16px 18px;
       display: flex;
       gap: 16px;
-      align-items: center;
+      align-items: flex-start;
       transition: all var(--transition);
       animation: fade-in 0.4s ease-out both;
     }
@@ -483,7 +817,7 @@
       object-fit: cover;
     }
     .result-info {
-      flex: 1;
+      flex: 1 1 auto;
       min-width: 0;
     }
     .result-name {
@@ -499,24 +833,61 @@
       color: var(--text-secondary);
       margin-top: 4px;
     }
-    .result-savings {
-      font-family: var(--font-display);
-      font-size: 18px;
-      font-weight: 700;
-      color: var(--success);
-      text-align: right;
-      flex-shrink: 0;
+    /* 格式结果放在右侧独立列，填充卡片横向空间 */
+    .result-badges {
+      flex: 0 0 auto;
+      width: 46%;
+      max-width: 560px;
+      align-self: flex-start;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+      gap: 6px;
     }
-    .result-savings small {
-      font-size: 11px;
-      color: var(--text-muted);
+    .fmt-chip {
       display: block;
-      font-weight: 400;
+      width: 100%;
+      padding: 6px 9px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-body);
+      text-align: left;
+      cursor: pointer;
+      transition: all var(--transition);
     }
-    .result-actions {
+    .fmt-chip:hover {
+      border-color: var(--accent);
+      background: var(--bg-card-hover);
+    }
+    .fmt-chip-top {
       display: flex;
-      gap: 8px;
-      flex-shrink: 0;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .fmt-chip .fmt-name {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      color: var(--accent);
+    }
+    .fmt-chip .fmt-save {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--success);
+      font-variant-numeric: tabular-nums;
+    }
+    .fmt-chip .fmt-save.grow { color: var(--error); }
+    .fmt-chip .fmt-save.keep { color: var(--text-muted); font-weight: 500; }
+    .fmt-chip .fmt-size {
+      display: block;
+      margin-top: 2px;
+      font-size: 10px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-variant-numeric: tabular-nums;
     }
     .btn-sm {
       padding: 8px 14px;
@@ -617,14 +988,19 @@
     .toast.error { border-color: var(--error); color: var(--error); }
 
     /* Responsive */
+    @media (max-width: 1100px) {
+      .result-cards { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); }
+    }
     @media (max-width: 640px) {
       .app-container { padding: 16px 16px 48px; }
       .settings-panel { flex-direction: column; }
       .format-options { grid-template-columns: repeat(2, 1fr); }
       .stats-summary { grid-template-columns: 1fr; }
-      .result-card { flex-wrap: wrap; }
+      .result-cards { grid-template-columns: 1fr; }
+      .result-card { flex-wrap: wrap; padding: 14px; gap: 12px; }
       .result-preview { width: 60px; height: 60px; }
-      .result-savings { font-size: 14px; }
+      .result-badges { width: 100%; max-width: none; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+      .stat-value { font-size: 20px; }
     }
 
     /* Spinner */
@@ -679,70 +1055,134 @@
   <div class="app-container">
     <header>
       <div class="logo">imgmin<span>.studio</span></div>
-      <div class="subtitle">Image Optimization</div>
+      <div class="subtitle">图片优化</div>
+      <button class="theme-toggle" id="themeToggle" title="切换明暗主题" aria-label="切换主题">🌙</button>
     </header>
 
     <!-- Drop zone -->
     <div class="drop-zone" id="dropZone">
-      <svg class="drop-icon" viewBox="0 0 64 64" fill="none">
-        <rect x="8" y="12" width="48" height="40" rx="4" stroke="currentColor" stroke-width="2"/>
-        <circle cx="24" cy="30" r="6" stroke="currentColor" stroke-width="2"/>
-        <path d="M8 42L22 32L34 40L48 28L56 36" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        <path d="M32 4V20M24 12L32 4L40 12" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <div class="drop-title">Drop images here</div>
-      <div class="drop-subtitle">
-        or <em class="pick-files">browse files</em> · <em class="pick-folder">pick a folder</em>
-        <br>JPG, PNG, GIF, WebP, AVIF, TIFF
+      <div class="drop-default">
+        <svg class="drop-icon" viewBox="0 0 64 64" fill="none">
+          <rect x="8" y="12" width="48" height="40" rx="4" stroke="currentColor" stroke-width="2"/>
+          <circle cx="24" cy="30" r="6" stroke="currentColor" stroke-width="2"/>
+          <path d="M8 42L22 32L34 40L48 28L56 36" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <path d="M32 4V20M24 12L32 4L40 12" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div class="drop-title">拖入图片到此处</div>
+        <div class="drop-subtitle">
+          或 <em class="pick-files">选择文件</em> · <em class="pick-folder">选择文件夹</em>
+          <br>支持 JPG、PNG、GIF、WebP、AVIF、BMP、TIFF（HEIC 等暂不支持）
+        </div>
       </div>
-      <input type="file" id="fileInput" accept="image/*" multiple>
+
+      <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.webp,.avif,.gif,.bmp,.tif,.tiff" multiple>
       <input type="file" id="folderInput" webkitdirectory hidden>
+    </div>
+
+    <!-- Uploaded files / analysis panel (shown below the drop zone, never replaces it) -->
+    <div class="drop-analysis analysis-below" id="dropAnalysis" style="display:none">
+      <!-- 单张图片：分析详情 + 文件名 + 删除 -->
+      <div class="da-single" id="daSingle" style="display:none">
+        <div class="drop-thumb"><img id="dropThumb" alt="预览"></div>
+        <div class="drop-info">
+          <div class="drop-info-head">
+            <span class="analysis-fmt" id="anFmt">—</span>
+            <span class="analysis-level" id="anLevel">—</span>
+          </div>
+          <div class="da-name" id="daName"></div>
+          <div class="da-body">
+            <div class="drop-info-grid">
+              <div><span class="k">尺寸</span><span class="v" id="anDims">—</span></div>
+              <div><span class="k">大小</span><span class="v" id="anSize">—</span></div>
+              <div><span class="k">每像素比特</span><span class="v" id="anBpp">—</span></div>
+              <div><span class="k">色彩空间</span><span class="v" id="anSpace">—</span></div>
+              <div><span class="k">通道</span><span class="v" id="anChannels">—</span></div>
+              <div><span class="k">位深</span><span class="v" id="anDepth">—</span></div>
+              <div><span class="k">分辨率</span><span class="v" id="anDensity">—</span></div>
+              <div><span class="k">透明</span><span class="v" id="anAlpha">—</span></div>
+              <div><span class="k">方向</span><span class="v" id="anOrient">—</span></div>
+            </div>
+            <div class="da-side">
+              <div class="analysis-note" id="anNote"></div>
+              <div class="analysis-rec" id="anRec"></div>
+              <button class="btn-sm primary" id="anApply" style="display:none" type="button">应用建议质量</button>
+            </div>
+          </div>
+        </div>
+        <button class="fi-del da-del" id="daDelSingle" type="button" title="移除" aria-label="移除">×</button>
+      </div>
+      <!-- 多张图片：文件行列表 -->
+      <div class="da-files" id="daFiles"></div>
     </div>
 
     <!-- Settings -->
     <div class="settings-panel">
-      <div class="setting-group">
-        <div class="setting-label">Format</div>
+      <div class="setting-group" id="formatGroup">
+        <div class="setting-label">格式</div>
         <div class="format-options">
           <div class="format-btn" data-format="webp">
             <div class="format-check">✓</div>
             <div class="format-name">WebP</div>
-            <div class="format-desc">Best ratio</div>
+            <div class="format-desc">最优比例</div>
           </div>
           <div class="format-btn" data-format="avif">
             <div class="format-check">✓</div>
             <div class="format-name">AVIF</div>
-            <div class="format-desc">Smallest</div>
+            <div class="format-desc">体积最小</div>
           </div>
           <div class="format-btn" data-format="jpeg">
             <div class="format-check">✓</div>
             <div class="format-name">JPEG</div>
-            <div class="format-desc">Universal</div>
+            <div class="format-desc">通用兼容</div>
           </div>
           <div class="format-btn" data-format="png">
             <div class="format-check">✓</div>
             <div class="format-name">PNG</div>
-            <div class="format-desc">Lossless</div>
+            <div class="format-desc">无损</div>
           </div>
           <div class="format-btn active" data-format="original">
             <div class="format-check">✓</div>
-            <div class="format-name">Original</div>
-            <div class="format-desc">Keep format</div>
+            <div class="format-name">原格式</div>
+            <div class="format-desc">保留原格式</div>
           </div>
         </div>
-        <div class="format-count" id="formatCount">1 format selected</div>
+        <div class="format-count" id="formatCount">已选 1 种格式</div>
       </div>
       <div class="setting-group">
-        <div class="setting-label">Quality</div>
+        <div class="setting-label">质量</div>
         <div class="quality-display">
           <div class="quality-value" id="qualityValue">80</div>
-          <div class="quality-hint" id="qualityHint">Balanced quality for WebP</div>
+          <div class="quality-hint" id="qualityHint">WebP 均衡质量</div>
         </div>
         <div class="slider-container">
           <div class="slider-track">
             <div class="slider-fill" id="sliderFill" style="width:80%"></div>
           </div>
           <input type="range" id="qualitySlider" min="1" max="100" value="80">
+        </div>
+        <div class="quality-tip">
+          <strong>提示：</strong>质量越高文件越大；已被压到极限的图用高值重编码可能反而变大（同格式变大时自动保留原图）。
+        </div>
+      </div>
+
+      <div class="setting-group smart-group">
+        <label class="smart-toggle">
+          <input type="checkbox" id="smartMode">
+          <span class="smart-toggle-box"></span>
+          <span class="smart-toggle-text">
+            <strong>智能模式</strong>
+            <small>内容感知选格式 + 自适应质量（SSIM / Butteraugli）</small>
+          </span>
+        </label>
+        <div class="smart-options" id="smartOptions" style="display:none">
+          <div class="metric-row">
+            <label class="metric-label" for="metricSelect">质量指标</label>
+            <select id="metricSelect" class="metric-select">
+              <option value="ssim">SSIM（默认）</option>
+              <option value="butteraugli">Butteraugli</option>
+            </select>
+          </div>
+          <div class="metric-desc" id="metricDesc"></div>
         </div>
       </div>
     </div>
@@ -752,7 +1192,7 @@
       <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
         <path d="M10 2L2 10l8 8 8-8-8-8zM10 5l5 5-5 5-5-5 5-5z"/>
       </svg>
-      Compress Images
+      压缩图片
     </button>
     <div class="progress-bar" id="progressBar">
       <div class="progress-fill" id="progressFill"></div>
@@ -761,12 +1201,12 @@
     <!-- Results -->
     <div class="results-area" id="resultsArea" style="display:none">
       <div class="results-header">
-        <div class="results-title">Results</div>
+        <div class="results-title">处理结果</div>
         <button class="download-all-btn" id="downloadAllBtn" style="display:none">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 12L3 7h3V1h4v6h3L8 12zM2 14h12v1H2z"/>
           </svg>
-          Download All
+          下载全部
         </button>
       </div>
       <div class="stats-summary" id="statsSummary"></div>
@@ -783,6 +1223,8 @@
       files: [],
       formats: ['original'],
       quality: 80,
+      smart: false,
+      metric: 'ssim',
       processing: false,
       zipping: false,
       results: []
@@ -805,18 +1247,68 @@
     const sliderFill = document.getElementById('sliderFill');
     const formatCount = document.getElementById('formatCount');
     const toast = document.getElementById('toast');
+    const smartMode = document.getElementById('smartMode');
+    const smartOptions = document.getElementById('smartOptions');
+    const metricSelect = document.getElementById('metricSelect');
+    const metricDesc = document.getElementById('metricDesc');
+    const METRIC_DESC = {};
+    METRIC_DESC.ssim='SSIM：结构相似性，通用均衡';
+    METRIC_DESC.butteraugli='Butteraugli：人眼感知差异，体积更小';
+    function updateMetricDesc() { metricDesc.textContent = METRIC_DESC[metricSelect.value] || ''; }
+    const formatGroup = document.getElementById('formatGroup');
+    const themeToggle = document.getElementById('themeToggle');
+    const dropAnalysis = document.getElementById('dropAnalysis');
+    const daSingle = document.getElementById('daSingle');
+    const daFiles = document.getElementById('daFiles');
+    const daName = document.getElementById('daName');
+    const daDelSingle = document.getElementById('daDelSingle');
+    daDelSingle.addEventListener('click', () => removeFile(0));
+    const dropThumb = document.getElementById('dropThumb');
+    const anFmt = document.getElementById('anFmt');
+    const anLevel = document.getElementById('anLevel');
+    const anDims = document.getElementById('anDims');
+    const anSize = document.getElementById('anSize');
+    const anBpp = document.getElementById('anBpp');
+    const anSpace = document.getElementById('anSpace');
+    const anChannels = document.getElementById('anChannels');
+    const anDepth = document.getElementById('anDepth');
+    const anDensity = document.getElementById('anDensity');
+    const anAlpha = document.getElementById('anAlpha');
+    const anOrient = document.getElementById('anOrient');
+    const anNote = document.getElementById('anNote');
+    const anRec = document.getElementById('anRec');
+    const anApply = document.getElementById('anApply');
+    let analysisSuggestedQuality = null;
+    let dropThumbUrl = null;
+
+    // 主题切换（黑 / 白）
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      try { localStorage.setItem('imgmin-theme', theme); } catch (e) {}
+      themeToggle.textContent = theme === 'light' ? '🌙' : '☀️';
+    }
+    (function initTheme() {
+      let saved = 'dark';
+      try { saved = localStorage.getItem('imgmin-theme') || 'dark'; } catch (e) {}
+      applyTheme(saved);
+    })();
+    themeToggle.addEventListener('click', () => {
+      const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+      applyTheme(cur === 'light' ? 'dark' : 'light');
+    });
 
     // Quality hints per format
     const qualityHints = {
-      webp: { low: 'Maximum compression', mid: 'Balanced quality for WebP', high: 'Near-lossless WebP' },
-      avif: { low: 'Ultra-small files', mid: 'Recommended AVIF range (50-65)', high: 'AVIF >70 is overkill' },
-      jpeg: { low: 'Heavy compression', mid: 'Good JPEG quality', high: 'High-quality JPEG' },
-      png: { low: 'Minimal palette', mid: 'Standard PNG', high: 'Lossless PNG' },
-      original: { low: 'Heavy compression', mid: 'Balanced quality', high: 'Near-lossless' }
+      webp: { low: '最大压缩', mid: 'WebP 均衡质量', high: '近似无损 WebP' },
+      avif: { low: '极小文件', mid: 'AVIF 推荐区间（50-65）', high: 'AVIF >70 过高' },
+      jpeg: { low: '高压缩', mid: '良好 JPEG 质量', high: '高质量 JPEG' },
+      png: { low: '最小调色板', mid: '标准 PNG', high: '无损 PNG' },
+      original: { low: '高压缩', mid: '均衡质量', high: '近似无损' }
     };
 
     // Init format count
     updateFormatCount();
+    updateQualityHint();
 
     // Format selection (multi-select)
     document.querySelectorAll('.format-btn').forEach(btn => {
@@ -844,9 +1336,9 @@
     function updateFormatCount() {
       const count = state.formats.length;
       if (count === 1) {
-        formatCount.textContent = `1 format · ${state.formats[0].toUpperCase()}`;
+        formatCount.textContent = `已选 1 种格式 · ${state.formats[0].toUpperCase()}`;
       } else {
-        formatCount.textContent = `${count} formats selected`;
+        formatCount.textContent = `已选 ${count} 种格式`;
       }
       formatCount.classList.add('visible');
     }
@@ -872,6 +1364,27 @@
       qualityValue.textContent = state.quality;
       sliderFill.style.width = `${state.quality}%`;
       updateQualityHint();
+    });
+
+    // Smart mode toggle
+    smartMode.addEventListener('change', () => {
+      state.smart = smartMode.checked;
+      smartOptions.style.display = state.smart ? 'block' : 'none';
+      if (state.smart) updateMetricDesc();
+      // Smart mode overrides manual format & quality selection
+      if (state.smart) {
+        formatGroup.classList.add('disabled-overlay');
+        qualitySlider.disabled = true;
+        qualitySlider.parentElement.parentElement.classList.add('dimmed');
+      } else {
+        formatGroup.classList.remove('disabled-overlay');
+        qualitySlider.disabled = false;
+        qualitySlider.parentElement.parentElement.classList.remove('dimmed');
+      }
+    });
+    metricSelect.addEventListener('change', () => {
+      state.metric = metricSelect.value;
+      updateMetricDesc();
     });
 
     // Drop zone events
@@ -957,28 +1470,202 @@
       }
     }
 
+    // 前端支持的输入格式（与 sharp 解码能力一致；HEIC/HEIF 等暂不解码）
+    const SUPPORTED_EXT = ['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif', 'bmp', 'tif', 'tiff'];
+    function extOf(name) {
+      const i = name.lastIndexOf('.');
+      return i >= 0 ? name.slice(i + 1).toLowerCase() : '';
+    }
+
     function handleFiles(fileList) {
-      state.files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
-      if (state.files.length === 0) {
-        showToast('No valid image files selected', 'error');
+      const all = Array.from(fileList);
+      const supported = [];
+      const rejected = [];
+      for (const f of all) {
+        if (SUPPORTED_EXT.includes(extOf(f.name))) supported.push(f);
+        else rejected.push(f.name);
+      }
+      if (supported.length === 0) {
+        // 本次选中的全部不支持：保留之前的选择并提示，不进入处理
+        const shown = rejected.slice(0, 3).join('、') + (rejected.length > 3 ? ` 等 ${rejected.length} 个` : '');
+        showToast(
+          state.files.length > 0
+            ? `已忽略 ${rejected.length} 个不支持的文件（如 HEIC）：${shown}`
+            : `不支持的格式，无法处理：${shown}`,
+          state.files.length > 0 ? 'warn' : 'error'
+        );
         return;
       }
-      processBtn.disabled = false;
-      const dropTitle = dropZone.querySelector('.drop-title');
-      const folderContext = state._folderName ? ` from <em>${state._folderName}</em>` : '';
-
-      if (state.files.length <= 3) {
-        const names = state.files.map(f => f.name).join(', ');
-        dropTitle.textContent = names;
-        dropTitle.title = names;
-      } else {
-        dropTitle.textContent = `${state.files.length} images selected`;
-        dropTitle.title = state.files.map(f => f.name).join(', ');
+      if (rejected.length > 0) {
+        const shown = rejected.slice(0, 3).join('、') + (rejected.length > 3 ? ` 等 ${rejected.length} 个` : '');
+        showToast(`已忽略 ${rejected.length} 个不支持的文件（如 HEIC）：${shown}`, 'warn');
       }
-      const suffix = ' or drop more images';
-      dropZone.querySelector('.drop-subtitle').innerHTML =
-        `Click <em>Compress</em> to process${folderContext}${suffix}`;
+      state.files = supported;
+      processBtn.disabled = false;
+
+      // 单张：展示分析；多张：展示文件行列表（都在下方卡片内，拖放区保持原样）
+      if (state.files.length === 1) {
+        analyzeSingle(state.files[0]);
+      } else {
+        renderPanel();
+      }
     }
+
+    // 渲染下方卡片：有文件即显示；单图展示分析，多图展示文件行列表
+    function renderPanel() {
+      if (state.files.length === 0) {
+        hideDropAnalysis();
+        return;
+      }
+      dropAnalysis.style.display = '';
+      if (state.files.length === 1) {
+        daSingle.style.display = '';
+        daFiles.style.display = 'none';
+        daFiles.innerHTML = '';
+      } else {
+        daSingle.style.display = 'none';
+        daFiles.style.display = '';
+        renderFileRows();
+      }
+    }
+
+    // 多图：渲染文件行列表（每行缩略图 + 名称 + 大小 + 右侧删除）
+    function renderFileRows() {
+      daFiles.innerHTML = '';
+      state.files.forEach((file, i) => {
+        const item = document.createElement('div');
+        item.className = 'file-item';
+
+        const thumb = document.createElement('div');
+        thumb.className = 'fi-thumb';
+        const img = document.createElement('img');
+        const url = URL.createObjectURL(file);
+        img.src = url;
+        img.onload = () => URL.revokeObjectURL(url);
+        thumb.appendChild(img);
+
+        const meta = document.createElement('div');
+        meta.className = 'fi-meta';
+        const name = document.createElement('div');
+        name.className = 'fi-name';
+        name.textContent = file.name;
+        name.title = file.name;
+        const size = document.createElement('div');
+        size.className = 'fi-size';
+        size.textContent = formatSize(file.size);
+        meta.appendChild(name);
+        meta.appendChild(size);
+
+        const del = document.createElement('button');
+        del.className = 'fi-del';
+        del.type = 'button';
+        del.title = '移除';
+        del.setAttribute('aria-label', '移除 ' + file.name);
+        del.textContent = '×';
+        del.addEventListener('click', () => removeFile(i));
+
+        item.appendChild(thumb);
+        item.appendChild(meta);
+        item.appendChild(del);
+        daFiles.appendChild(item);
+      });
+    }
+
+    // 从已选列表中移除某个文件
+    function removeFile(index) {
+      state.files.splice(index, 1);
+      if (state.files.length === 1) {
+        analyzeSingle(state.files[0]);
+      } else {
+        renderPanel();
+      }
+      processBtn.disabled = state.files.length === 0;
+    }
+
+    // 单张图片：调用 /api/info 做压缩潜力分析
+    async function analyzeSingle(file) {
+      // 单图：显示分析区、填文件名，缩略图本地生成（无需等待服务端）
+      dropAnalysis.style.display = '';
+      daSingle.style.display = '';
+      daFiles.style.display = 'none';
+      daFiles.innerHTML = '';
+      daName.textContent = file.name;
+      daName.title = file.name;
+      if (dropThumbUrl) { URL.revokeObjectURL(dropThumbUrl); }
+      dropThumbUrl = URL.createObjectURL(file);
+      dropThumb.src = dropThumbUrl;
+
+      const fd = new FormData();
+      fd.append('image', file);
+      try {
+        const res = await fetch('/api/info', { method: 'POST', body: fd });
+        if (!res.ok) { hideDropAnalysis(); return; }
+        const info = await res.json();
+        renderAnalysis(info);
+      } catch (e) {
+        hideDropAnalysis();
+      }
+    }
+
+    function hideDropAnalysis() {
+      dropZone.classList.remove('has-analysis');
+      dropAnalysis.style.display = 'none';
+    }
+
+    // 技术细节字段的可读化映射
+    const SPACE_LABELS = { srgb: 'sRGB', 'b-w': '灰度', cmyk: 'CMYK', rgb16: 'RGB 16 位', scrgb: 'scRGB', 'rgb': 'RGB' };
+    const DEPTH_LABELS = { uchar: '8 位', ushort: '16 位', short: '16 位', uint: '32 位', int: '32 位', float: '32 位浮点', double: '64 位浮点' };
+    const ORIENT_LABELS = {
+      1: '正常', 2: '水平翻转', 3: '旋转 180°', 4: '垂直翻转',
+      5: '转置', 6: '顺时针 90°', 7: '反转置', 8: '逆时针 90°'
+    };
+
+    function renderAnalysis(info) {
+      const a = info.analysis;
+      // 基本信息始终展示：格式 / 尺寸 / 大小
+      anFmt.textContent = (info.format || '—').toUpperCase();
+      anDims.textContent = info.width && info.height ? `${info.width}×${info.height}` : '—';
+      anSize.textContent = formatSize(info.size);
+      // 技术细节
+      anSpace.textContent = SPACE_LABELS[(info.space || '').toLowerCase()] || (info.space ? String(info.space).toUpperCase() : '—');
+      anChannels.textContent = info.channels ? `${info.channels} 通道` : '—';
+      anDepth.textContent = DEPTH_LABELS[(info.depth || '').toLowerCase()] || (info.depth || '—');
+      anDensity.textContent = info.density ? `${info.density} DPI` : '—';
+      anAlpha.textContent = info.hasAlpha ? '有' : '无';
+      anOrient.textContent = ORIENT_LABELS[info.orientation] || (info.orientation ? `${info.orientation}` : '正常');
+      dropAnalysis.style.display = '';
+
+      // 缺少分析对象时，仅保留基本信息（不隐藏整张卡片）
+      if (!a) {
+        anLevel.textContent = '—';
+        anLevel.className = 'analysis-level unknown';
+        anBpp.textContent = '—';
+        anNote.textContent = '';
+        anRec.innerHTML = '';
+        anApply.style.display = 'none';
+        return;
+      }
+
+      anLevel.textContent = a.level;
+      anLevel.className = `analysis-level ${a.levelKey}`;
+      anBpp.textContent = a.bpp ? `${a.bpp} bit` : '—';
+      anNote.textContent = a.note || '';
+
+      let rec = a.recommendation || '';
+      if (a.suggestedQuality) rec += ` <strong>建议质量 ${a.suggestedQuality}</strong>`;
+      anRec.innerHTML = rec;
+
+      analysisSuggestedQuality = a.suggestedQuality;
+      anApply.style.display = a.suggestedQuality ? '' : 'none';
+    }
+
+    // 应用建议质量到滑块（仅在非智能模式时有效）
+    anApply.addEventListener('click', () => {
+      if (analysisSuggestedQuality == null || state.smart) return;
+      qualitySlider.value = analysisSuggestedQuality;
+      qualitySlider.dispatchEvent(new Event('input'));
+      showToast(`已应用建议质量 ${analysisSuggestedQuality}`, 'success');
+    });
 
     // Process
     processBtn.addEventListener('click', startProcessing);
@@ -988,14 +1675,19 @@
       state.processing = true;
       processBtn.disabled = true;
       processBtn.classList.add('processing');
-      processBtn.innerHTML = '<span class="spinner"></span> Processing...';
+      processBtn.innerHTML = '<span class="spinner"></span> 处理中...';
       progressBar.classList.add('visible');
       progressFill.style.width = '0%';
 
       const formData = new FormData();
       state.files.forEach(f => formData.append('images', f));
-      state.formats.forEach(fmt => formData.append('formats', fmt));
-      formData.append('quality', state.quality);
+      if (state.smart) {
+        formData.append('smart', '1');
+        formData.append('metric', state.metric);
+      } else {
+        state.formats.forEach(fmt => formData.append('formats', fmt));
+        formData.append('quality', state.quality);
+      }
 
       try {
         progressFill.style.width = '30%';
@@ -1011,13 +1703,13 @@
         progressFill.style.width = '100%';
         state.results = data.results;
         showResults(data.results);
-        showToast(`Processed ${data.results.filter(r => r.success).length} images`, 'success');
+        showToast(`已处理 ${data.results.filter(r => r.success).length} 张图片`, 'success');
       } catch (err) {
         showToast(err.message, 'error');
       } finally {
         state.processing = false;
         processBtn.classList.remove('processing');
-        processBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2L2 10l8 8 8-8-8-8zM10 5l5 5-5 5-5-5 5-5z"/></svg> Compress Images`;
+        processBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2L2 10l8 8 8-8-8-8zM10 5l5 5-5 5-5-5 5-5z"/></svg> 压缩图片`;
         processBtn.disabled = state.files.length === 0;
         setTimeout(() => {
           progressBar.classList.remove('visible');
@@ -1034,25 +1726,36 @@
       
       // Stats
       if (successes.length > 0) {
-        const totalOriginalSet = new Set(successes.map(r => r.originalName));
-        const totalOriginal = successes.reduce((s, r) => {
-          // Each unique source file contributes its original size once per format
-          return s + r.originalSize;
-        }, 0);
-        const totalCompressed = successes.reduce((s, r) => s + r.compressedSize, 0);
+        // 结果是一张原图 × N 种格式展开的，原图体积只能按「唯一文件」计一次
+        const originalByFile = new Map();
+        successes.forEach(r => {
+          if (!originalByFile.has(r.originalName)) {
+            originalByFile.set(r.originalName, Number(r.originalSize) || 0);
+          }
+        });
+        const totalOriginal = [...originalByFile.values()].reduce((a, b) => a + b, 0);
+        const totalCompressed = successes.reduce((s, r) => s + (Number(r.compressedSize) || 0), 0);
+        const savedBytes = totalOriginal - totalCompressed;
+        const savedRatio = totalOriginal > 0 ? (savedBytes / totalOriginal) * 100 : 0;
+        const grew = savedBytes < 0;
+        const savedValue = `${grew ? '+' : ''}${Math.abs(savedRatio).toFixed(1)}%`;
+        const savedSub = grew
+          ? `体积增加 ${formatSize(Math.abs(savedBytes))}`
+          : `省下 ${formatSize(savedBytes)}`;
         
         statsSummary.innerHTML = `
           <div class="stat-card accent">
-            <div class="stat-label">Images × Formats</div>
-            <div class="stat-value">${totalOriginalSet.size} × ${state.formats.length}</div>
+            <div class="stat-label">图片 × 格式</div>
+            <div class="stat-value">${originalByFile.size} × ${state.smart ? '自动' : state.formats.length}</div>
           </div>
           <div class="stat-card success">
-            <div class="stat-label">Outputs</div>
+            <div class="stat-label">输出数</div>
             <div class="stat-value">${successes.length}</div>
           </div>
-          <div class="stat-card">
-            <div class="stat-label">Total Saved (all formats)</div>
-            <div class="stat-value">${formatSize(totalOriginal - totalCompressed)}</div>
+          <div class="stat-card${grew ? ' warn' : ' success'}">
+            <div class="stat-label">总节省（全部格式）</div>
+            <div class="stat-value">${savedValue}</div>
+            <div class="stat-sub">${savedSub}</div>
           </div>
         `;
 
@@ -1079,37 +1782,50 @@
         const mainResult = formats[0];
         const previewUrl = `/api/output-file/${mainResult.outputPath.split('/').pop()}`;
 
-        const formatBadges = formats.map(r => `
-          <span style="
-            display:inline-flex;align-items:center;gap:4px;
-            background:var(--bg-elevated);border:1px solid var(--border-light);
-            border-radius:4px;padding:3px 8px;font-size:11px;font-weight:600;
-            color:var(--accent);margin-right:4px;margin-top:4px;
-          ">
-            ${r.format.toUpperCase()}
-            <span style="color:var(--success);font-weight:400;">-${r.savedPercent}%</span>
-            <span style="color:var(--text-muted);font-weight:400;">(${formatSize(r.compressedSize)})</span>
-          </span>
-        `).join('');
+        const formatBadges = formats.map(r => {
+          const kept = !!r.keptOriginal;
+          const pct = kept ? 0 : (parseFloat(r.savedPercent) || 0);
+          const pctLabel = pct > 0
+            ? `-${pct.toFixed(1)}%`
+            : (pct < 0 ? `+${Math.abs(pct).toFixed(1)}%` : '0%');
+          const meta = [
+            r.smart ? `Q${r.quality}` : '',
+            formatSize(r.compressedSize),
+            kept ? '已保留原图' : ''
+          ].filter(Boolean).join(' · ');
+          const tip = kept
+            ? `${r.format.toUpperCase()} 压缩后未变小，已保留原图 · 点击下载`
+            : `下载 ${r.format.toUpperCase()} · ${meta}`;
 
-        const downloadBtns = formats.map(r => `
-          <button class="btn-sm primary" onclick="downloadFile('${r.downloadUrl}', '${r.originalName}', '${r.format}')">
-            ${r.format.toUpperCase()}
-          </button>
-        `).join('');
+          return `
+          <button class="fmt-chip${kept ? ' kept' : ''}" type="button"
+                  title="${tip}"
+                  onclick="downloadFile('${r.downloadUrl}', '${r.originalName}', '${r.format}')">
+            <span class="fmt-chip-top">
+              <span class="fmt-name">${r.format.toUpperCase()}</span>
+              <span class="fmt-save${pct < 0 ? ' grow' : ''}${kept ? ' keep' : ''}">${pctLabel}</span>
+            </span>
+            <span class="fmt-size">${meta}</span>
+          </button>`;
+        }).join('');
+
+        const smartNote = mainResult.smart ? `
+          <div class="smart-note">
+            <span class="smart-note-reason">智能选择：${mainResult.reason}</span>
+            <span class="smart-note-meta">${mainResult.qualityMetric} ${formatScore(mainResult.qualityScore)}</span>
+          </div>
+        ` : '';
 
         card.innerHTML = `
           <div class="result-preview">
             <img src="${previewUrl}" alt="${originalName}" loading="lazy">
           </div>
-          <div class="result-info" style="flex:1;min-width:0;">
-            <div class="result-name">${originalName}</div>
-            <div class="result-meta" style="margin-top:6px;">Original: ${formatSize(mainResult.originalSize)} · ${mainResult.width}×${mainResult.height}</div>
-            <div style="display:flex;flex-wrap:wrap;margin-top:6px;">${formatBadges}</div>
+          <div class="result-info">
+            <div class="result-name" title="${originalName}">${originalName}</div>
+            <div class="result-meta">原图 ${formatSize(mainResult.originalSize)} · ${mainResult.width}×${mainResult.height} · 点击格式即可下载</div>
+            ${smartNote}
           </div>
-          <div class="result-actions" style="flex-shrink:0;display:flex;flex-direction:column;gap:6px;">
-            ${downloadBtns}
-          </div>
+          <div class="result-badges">${formatBadges}</div>
         `;
         resultCards.appendChild(card);
       });
@@ -1154,7 +1870,7 @@
 
       state.zipping = true;
       downloadAllBtn.disabled = true;
-      downloadAllBtn.innerHTML = '<span class="spinner"></span> Preparing zip...';
+      downloadAllBtn.innerHTML = '<span class="spinner"></span> 正在打包...';
 
       const filenames = successes.map(r => r.outputPath.split('/').pop());
 
@@ -1177,7 +1893,7 @@
         a.download = `imgmin_${new Date().toISOString().slice(0, 10)}.zip`;
         a.click();
         URL.revokeObjectURL(url);
-        showToast(`Downloading ${successes.length} files as zip`, 'success');
+        showToast(`正在下载 ${successes.length} 个文件的压缩包`, 'success');
       } catch (err) {
         showToast(err.message, 'error');
       } finally {
@@ -1187,13 +1903,21 @@
       }
     });
 
+    // Format quality metric score (SSIM 0~1 / Butteraugli 0~∞)
+    function formatScore(score) {
+      const n = Number(score);
+      if (!Number.isFinite(n)) return '';
+      return n.toFixed(4).replace(/\.?0+$/, '');
+    }
+
     // Format size
     function formatSize(bytes) {
-      if (bytes === 0) return '0 B';
+      const num = Math.abs(Number(bytes));
+      if (!Number.isFinite(num) || num === 0) return '0 B';
       const units = ['B', 'KB', 'MB', 'GB'];
       const k = 1024;
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return `${(bytes / Math.pow(k, i)).toFixed(2)} ${units[i]}`;
+      const i = Math.min(units.length - 1, Math.floor(Math.log(num) / Math.log(k)));
+      return `${(num / Math.pow(k, i)).toFixed(2)} ${units[i]}`;
     }
 
     // Toast

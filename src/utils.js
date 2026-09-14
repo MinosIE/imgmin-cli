@@ -102,6 +102,86 @@ export async function getImageInfo(filePath) {
 }
 
 /**
+ * 评估图片「还能不能继续压」——压缩潜力分析
+ * 通过计算每像素比特数(bpp)推断原图压缩程度，给出质量建议。
+ * @param {Object} info - getImageInfo 返回的对象
+ * @returns {Object} 分析结果
+ */
+const PHOTO_FORMATS = new Set(['jpeg', 'jpg', 'webp', 'avif', 'tiff', 'tif', 'heif', 'heic']);
+const LOSSLESS_FORMATS = new Set(['png', 'gif', 'bmp', 'svg']);
+
+export function analyzeCompressibility(info) {
+  const { format, width, height, size } = info;
+  const fmt = (format || '').toLowerCase();
+  const px = (width || 0) * (height || 0);
+  const bpp = px > 0 ? (size * 8) / px : 0; // bits per pixel
+
+  const isPhoto = PHOTO_FORMATS.has(fmt);
+  const isLossless = LOSSLESS_FORMATS.has(fmt);
+
+  let level, levelKey, note, recommendation;
+  let suggestedQuality = null;       // 同格式重编码的建议质量
+  let canShrinkWithFormat = false;   // 转 WebP/AVIF 是否值得
+
+  if (isLossless) {
+    level = '无损格式';
+    levelKey = 'lossless';
+    if (bpp > 4) {
+      note = `当前为 ${fmt.toUpperCase()} 无损格式，体积明显偏大`;
+      recommendation = '若原图是照片 / 插画，转 WebP 或 AVIF 通常可减小 50% 以上（需透明则选 WebP）';
+      canShrinkWithFormat = true;
+    } else {
+      note = `PNG 体积较小，可能是图标 / 截图 / 线条图`;
+      recommendation = '这类内容用 PNG 已合适；转 WebP 还能再小一点，但收益有限';
+      canShrinkWithFormat = bpp > 2;
+    }
+  } else if (isPhoto) {
+    if (bpp < 0.75) {
+      level = '已高度压缩';
+      levelKey = 'aggressive';
+      note = `每像素仅 ${bpp.toFixed(2)} bit，相当于质量极低（约 q40 以下）`;
+      recommendation = '按 q80 重编码几乎必然变大；想变小请把质量降到 40–55，或开启智能模式';
+      suggestedQuality = 45;
+    } else if (bpp < 1.5) {
+      level = '压缩较充分';
+      levelKey = 'moderate';
+      note = `每像素 ${bpp.toFixed(2)} bit，原图已压得比较透`;
+      recommendation = 'q80 可能只微缩甚至略增；建议降到 50–65 再看效果';
+      suggestedQuality = 55;
+    } else if (bpp < 3) {
+      level = '压缩适中';
+      levelKey = 'ok';
+      note = `每像素 ${bpp.toFixed(2)} bit，仍有优化空间`;
+      recommendation = '按 q80 通常可再减小一些';
+      suggestedQuality = 75;
+    } else {
+      level = '质量较高';
+      levelKey = 'high';
+      note = `每像素 ${bpp.toFixed(2)} bit，原图质量较高`;
+      recommendation = '按 q80 应能明显减小';
+      suggestedQuality = 80;
+    }
+  } else {
+    level = '未知类型';
+    levelKey = 'unknown';
+    note = `格式 ${fmt || '?'} 暂无法评估`;
+    recommendation = '可尝试压缩，或开启智能模式自动选格式';
+  }
+
+  return {
+    bpp: +bpp.toFixed(2),
+    isPhoto,
+    isLossless,
+    level,
+    levelKey,
+    note,
+    recommendation,
+    suggestedQuality,
+    canShrinkWithFormat
+  };
+}
+
+/**
  * 格式化文件大小
  * @param {number} bytes - 字节数
  * @returns {string} 格式化后的大小字符串
