@@ -206,7 +206,7 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 
 ### 7.1 页面结构
 - 拖放区（支持点击选文件 / 选文件夹；递归遍历文件夹用 `webkitGetAsEntry`）。
-- 设置面板：格式多选（WebP / AVIF / JPEG / PNG / 原格式）、质量滑块、智能模式开关（含指标下拉 SSIM/Butteraugli/PSNR）。
+- 设置面板：格式多选（WebP / AVIF / JPEG / PNG / 原格式）、质量滑块、智能模式开关（含指标竖向单选 SSIM/Butteraugli/PSNR，智能未勾选时整组置灰禁用）。
 - 压缩按钮 + 进度条。
 - 结果区：统计摘要卡（图片×格式 / 输出数 / 总节省%）+ 每张原图的结果卡片（含各格式 chip、智能理由）。
 - 主题切换（深色 / 浅色，localStorage 记忆）。
@@ -425,3 +425,10 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 - 决策：原生 Butteraugli（真值）在 Node CLI 下无可用依赖——`@squoosh-kit/visdif` 经 `fetch(file://)` 加载 WASM 且其 dist 缺失 Emscripten glue，无法实例化；`butteraugli`@0.0.2（2017 原生 addon）需 node-gyp 构建、年久失修，风险高。用户选定**不引入原生依赖**，改为升级现有近似算法为更接近真值的实现。
 - 方案（§6.2 / §11.2 同步更新）：`src/smart.js` 的 `computeButteraugli` 由「Rec.709 亮度加权逐像素色差」升级为 sRGB→CIELAB 正确转换 + 多尺度（1x/0.5x/0.25x）误差 + 暗部敏感权重 + 对比度掩蔽 + Minkowski(p≈0.6) 空间池化（兼顾最差区域），输出标定到 ~Butteraugli 量纲（0=相同、≤1.2 达标）。阈值、指标名、CLI/UI 契约均不变。
 - 进度（已完成）：`src/smart.js` 已升级 `computeButteraugli` 为 CIELAB 多尺度加权实现（含 `toLabPlanes` / `butteraugliDistance`，已导出便于测试），原图 Lab 平面只解码一次复用；`tests/smart.test.js` 新增行为用例（相同图≈0、低质量距离>高质量、量纲合理），`node --test tests/smart.test.js` 6/6 通过；CLI 冒烟验证：平滑图 q82 距离 0.34（选低质量省 99.5%）、噪声图始终>1.2（保持高质），符合感知模型。阈值 / 指标名 / CLI·UI 契约均不变。
+
+### 2026-09-15 · 新增 PSNR 质量指标 + 质量指标竖向单选 UI
+- 背景：智能模式自适应质量已有 SSIM（结构类）/ Butteraugli（感知类）两类指标，缺「误差 / 保真度类」标准参照系（PSNR dB 数），用户认可仅补 PSNR（MSE/DSSIM 冗余、VMAF/SSIMULACRA2 需训练模型违反离线零依赖约束）。
+- 引擎（`src/smart.js`）：新增 `computePSNR`（基于 RGB 通道 MSE，封顶 100dB 防 Infinity）；`findOptimalQuality` 增加 `psnr` 分支，阈值默认 `≥38dB`；用 `higherBetter` 统一 SSIM/PSNR（越大越好）与 Butteraugli（越小越好）的判定，CLI/UI 契约不变。
+- 测试（`tests/smart.test.js`）：新增 `findOptimalQuality({metric:'psnr'})` 与 `computePSNR` 行为用例（相同图≈100dB、高质量>低质量），`node --test tests/smart.test.js` 8/8 通过。
+- UI（`src/ui-public/index.html`）：质量指标由下拉框改为直接展示的**竖向单选**（SSIM / Butteraugli / PSNR，每行左单选框右名称 + 小字解释），智能模式未勾选时整组置灰禁用、勾选后可点；移除原公共说明块与废弃样式。
+- 文档（§6.2 / AGENTS.md §1.5·§2.5·§5.1 同步）：补 PSNR 指标说明与阈值 `≥38dB`，API 契约 `metric` 枚举扩为 `ssim | butteraugli | psnr`。零新依赖，离线可用。
