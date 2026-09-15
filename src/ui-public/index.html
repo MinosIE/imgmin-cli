@@ -155,9 +155,22 @@
         font-weight: 400;
       }
 
+      /* Slogan: absorbs the free space so it sits right before the toggle */
+      .tagline {
+        margin-left: auto;
+        font-family: var(--font-body);
+        font-size: 13px;
+        letter-spacing: 0.3px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+      }
+      .tagline em {
+        font-style: normal;
+        color: var(--accent);
+      }
+
       /* Theme toggle button */
       .theme-toggle {
-        margin-left: auto;
         width: 40px;
         height: 40px;
         border: 1px solid var(--border);
@@ -562,7 +575,6 @@
         display: block;
       }
       .drop-info {
-        flex: 1;
         min-width: 0;
       }
       .drop-info-head {
@@ -655,6 +667,31 @@
         color: var(--text);
         font-variant-numeric: tabular-nums;
       }
+      /* 窄屏：指标网格改为「标签—数值」紧凑单行列表，消除单列堆叠的大片空白。
+         置于基础规则之后，确保同优先级下能覆盖 .k / .v 的默认样式。 */
+      @media (max-width: 540px) {
+        .drop-info-grid {
+          grid-template-columns: 1fr;
+          gap: 0;
+        }
+        .drop-info-grid > div {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 6px 0;
+          border-bottom: 1px solid var(--border-light);
+        }
+        .drop-info-grid > div:last-child {
+          border-bottom: none;
+        }
+        .drop-info-grid .k {
+          margin-bottom: 0;
+        }
+        .drop-info-grid .v {
+          text-align: right;
+        }
+      }
       .analysis-note {
         font-size: 12.5px;
         color: var(--text-secondary);
@@ -677,9 +714,27 @@
       /* Uploaded files / analysis panel (rendered below the drop zone) */
       .da-single {
         position: relative;
-        display: flex;
-        gap: 20px;
-        align-items: flex-start;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        grid-template-areas:
+          "thumb info del"
+          "body  body body";
+        gap: 14px 20px;
+        align-items: start;
+      }
+      .da-single > .drop-thumb {
+        grid-area: thumb;
+      }
+      .da-single > .drop-info {
+        grid-area: info;
+      }
+      /* 尺寸及以下信息（.da-body）独占次行、跨满整宽，从图片左缘起排 */
+      .da-single > .da-body {
+        grid-area: body;
+        min-width: 0;
+      }
+      .da-single > .da-del {
+        grid-area: del;
       }
       .da-name {
         font-size: 14px;
@@ -1381,6 +1436,23 @@
         .app-container {
           padding: 16px 16px 48px;
         }
+        /* Slogan 在小屏换行展示：logo + 主题按钮占首行，slogan 独占次行 */
+        header {
+          flex-wrap: wrap;
+          row-gap: 4px;
+        }
+        .tagline {
+          order: 3;
+          flex: 1 0 100%;
+          margin-left: 0;
+          font-size: 12px;
+        }
+        .theme-toggle {
+          margin-left: auto;
+        }
+        .analysis-below {
+          padding: 18px 16px;
+        }
         .format-options {
           grid-template-columns: repeat(2, 1fr);
         }
@@ -1471,6 +1543,7 @@
     <div class="app-container">
       <header>
         <div class="logo">imgmin<span>.studio</span></div>
+        <div class="tagline">压得更小 · 看得更清 · <em>全程本地</em></div>
         <button
           class="theme-toggle"
           id="themeToggle"
@@ -1547,57 +1620,57 @@
               <span class="analysis-level" id="anLevel">—</span>
             </div>
             <div class="da-name" id="daName"></div>
-            <div class="da-body">
-              <div class="drop-info-grid">
-                <div>
-                  <span class="k">尺寸</span
-                  ><span class="v" id="anDims">—</span>
-                </div>
-                <div>
-                  <span class="k">大小</span
-                  ><span class="v" id="anSize">—</span>
-                </div>
-                <div>
-                  <span class="k">每像素比特</span
-                  ><span class="v" id="anBpp">—</span>
-                </div>
-                <div>
-                  <span class="k">色彩空间</span
-                  ><span class="v" id="anSpace">—</span>
-                </div>
-                <div>
-                  <span class="k">通道</span
-                  ><span class="v" id="anChannels">—</span>
-                </div>
-                <div>
-                  <span class="k">位深</span
-                  ><span class="v" id="anDepth">—</span>
-                </div>
-                <div>
-                  <span class="k">分辨率</span
-                  ><span class="v" id="anDensity">—</span>
-                </div>
-                <div>
-                  <span class="k">透明</span
-                  ><span class="v" id="anAlpha">—</span>
-                </div>
-                <div>
-                  <span class="k">方向</span
-                  ><span class="v" id="anOrient">—</span>
-                </div>
+          </div>
+          <div class="da-body">
+            <div class="drop-info-grid">
+              <div>
+                <span class="k">尺寸</span
+                ><span class="v" id="anDims">—</span>
               </div>
-              <div class="da-side">
-                <div class="analysis-note" id="anNote"></div>
-                <div class="analysis-rec" id="anRec"></div>
-                <button
-                  class="btn-sm primary"
-                  id="anApply"
-                  style="display: none"
-                  type="button"
-                >
-                  应用建议质量
-                </button>
+              <div>
+                <span class="k">大小</span
+                ><span class="v" id="anSize">—</span>
               </div>
+              <div>
+                <span class="k">每像素比特</span
+                ><span class="v" id="anBpp">—</span>
+              </div>
+              <div>
+                <span class="k">色彩空间</span
+                ><span class="v" id="anSpace">—</span>
+              </div>
+              <div>
+                <span class="k">通道</span
+                ><span class="v" id="anChannels">—</span>
+              </div>
+              <div>
+                <span class="k">位深</span
+                ><span class="v" id="anDepth">—</span>
+              </div>
+              <div>
+                <span class="k">分辨率</span
+                ><span class="v" id="anDensity">—</span>
+              </div>
+              <div>
+                <span class="k">透明</span
+                ><span class="v" id="anAlpha">—</span>
+              </div>
+              <div>
+                <span class="k">方向</span
+                ><span class="v" id="anOrient">—</span>
+              </div>
+            </div>
+            <div class="da-side">
+              <div class="analysis-note" id="anNote"></div>
+              <div class="analysis-rec" id="anRec"></div>
+              <button
+                class="btn-sm primary"
+                id="anApply"
+                style="display: none"
+                type="button"
+              >
+                应用建议质量
+              </button>
             </div>
           </div>
           <button
