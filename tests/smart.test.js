@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import fs from 'node:fs';
 import sharp from 'sharp';
-import { analyzeImage, smartSuggest, findOptimalQuality, butteraugliDistance, toLabPlanes } from '../src/smart.js';
+import { analyzeImage, smartSuggest, findOptimalQuality, butteraugliDistance, toLabPlanes, computePSNR } from '../src/smart.js';
 import { makeTempDir, createSolidImage, createNoisyImage, createAlphaImage } from './helpers/images.js';
 
 const SUPPORTED_FORMATS = ['webp', 'png', 'avif'];
@@ -100,4 +100,40 @@ test('butteraugli: 相同图距离≈0，低质量距离 > 高质量距离（CIE
   // 量纲标定：高质量压缩应处于「几乎无感」区间（<1.2），重度压缩应明显更大
   assert.ok(dHigh < 1.2, `高质量 webp 距离应 < 1.2（达标），实际 ${dHigh.toFixed(3)}`);
   assert.ok(dLow > dHigh * 1.5, `重度压缩距离应显著大于高质量，实际 low=${dLow.toFixed(3)} high=${dHigh.toFixed(3)}`);
+});
+
+test('findOptimalQuality: 支持 psnr 指标并返回指标名', async () => {
+  const dir = makeTempDir();
+  const file = await createNoisyImage(path.join(dir, 'photo.jpg'), { width: 128, height: 128 });
+
+  const result = await findOptimalQuality(file, { format: 'webp', metric: 'psnr' });
+
+  assert.equal(result.metric, 'psnr');
+  assert.ok(result.quality >= 1 && result.quality <= 82);
+  assert.equal(typeof result.score, 'number');
+  assert.ok(result.compressedSize > 0);
+
+  // PSNR 量纲为 dB，合理区间约 25~60
+  assert.ok(result.score > 20 && result.score < 70, `PSNR 分数应落在合理 dB 区间，实际 ${result.score}`);
+  // savedPercent 应与 originalSize / compressedSize 自洽
+  const expected = Number(((result.originalSize - result.compressedSize) / result.originalSize * 100).toFixed(1));
+  assert.equal(Number(result.savedPercent), expected);
+});
+
+test('psnr: 相同图≈100dB，低质量分数 < 高质量分数（越高越好）', async () => {
+  const dir = makeTempDir();
+  const file = await createNoisyImage(path.join(dir, 'photo.png'), { width: 96, height: 96 });
+  const orig = fs.readFileSync(file);
+
+  const lowQ = await sharp(orig).webp({ quality: 20 }).toBuffer();
+  const highQ = await sharp(orig).webp({ quality: 90 }).toBuffer();
+
+  const sSame = await computePSNR(orig, orig);
+  const sLow = await computePSNR(orig, lowQ);
+  const sHigh = await computePSNR(orig, highQ);
+
+  assert.ok(sSame >= 100 - 1e-6, `相同图 PSNR 应≈100dB，实际 ${sSame}`);
+  assert.ok(sHigh > sLow, `高质量 PSNR(${sHigh.toFixed(2)}) 应大于低质量(${sLow.toFixed(2)})`);
+  assert.ok(sHigh > 0 && sLow > 0, 'PSNR 应大于 0');
+  assert.ok(Number.isFinite(sLow) && Number.isFinite(sHigh), 'PSNR 应有限（非 Infinity/NaN）');
 });

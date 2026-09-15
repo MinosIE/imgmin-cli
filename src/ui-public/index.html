@@ -335,12 +335,6 @@
         color: var(--text-muted);
         line-height: 1.6;
       }
-      .metric-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-      }
       .metric-label {
         font-size: 12px;
         font-weight: 600;
@@ -348,34 +342,56 @@
         letter-spacing: 0.5px;
         white-space: nowrap;
       }
-      .metric-select {
-        appearance: none;
-        -webkit-appearance: none;
-        min-width: 128px;
-        background-color: var(--bg-elevated);
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5'/%3E%3C/svg%3E");
-        background-repeat: no-repeat;
-        background-position: right 9px center;
+      .metric-block {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .metric-radios {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .metric-radio-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 8px 10px;
         border: 1px solid var(--border-light);
         border-radius: var(--radius-sm);
-        color: var(--text);
-        padding: 7px 28px 7px 10px;
-        font-size: 13px;
-        font-family: inherit;
-        line-height: 1.2;
+        background-color: var(--bg-elevated);
         cursor: pointer;
         transition:
           border-color 0.15s,
-          box-shadow 0.15s,
           background-color 0.15s;
       }
-      .metric-select:hover {
+      .metric-radio-row input {
+        accent-color: var(--accent);
+        margin: 2px 0 0;
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+      .metric-radio-row:hover {
         border-color: var(--text-muted);
       }
-      .metric-select:focus {
-        outline: none;
+      .metric-radio-row:has(input:checked) {
         border-color: var(--accent);
-        box-shadow: 0 0 0 3px rgba(232, 168, 50, 0.18);
+        background-color: var(--accent-glow);
+      }
+      .metric-radio-text {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        line-height: 1.3;
+      }
+      .metric-radio-text strong {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .metric-radio-text small {
+        font-size: 11px;
+        color: var(--text-muted);
       }
 
       /* Disabled overlay when smart mode active */
@@ -1734,24 +1750,40 @@
             <span class="smart-toggle-box"></span>
             <span class="smart-toggle-text">
               <strong>智能模式</strong>
-              <small>内容感知选格式 + 自适应质量（SSIM / Butteraugli）</small>
+              <small>内容感知选格式 + 自适应质量（SSIM / Butteraugli / PSNR）</small>
             </span>
           </label>
           <p class="smart-intro">
             智能模式会按图片内容自动选格式（照片→AVIF、纯色 / 透明→WebP），用
-            SSIM / Butteraugli 自适应质量，兼顾体积与画质；开启后「格式 +
+            SSIM / Butteraugli / PSNR 自适应质量，兼顾体积与画质；开启后「格式 +
             质量」由它接管。
           </p>
           <div class="smart-options dimmed" id="smartOptions">
-            <div class="metric-row">
-              <label class="metric-label" for="metricSelect">质量指标</label>
-              <select id="metricSelect" class="metric-select" disabled>
-                <option value="ssim">SSIM（默认）</option>
-                <option value="butteraugli">Butteraugli</option>
-              </select>
-            </div>
-            <div class="metric-desc" id="metricDesc">
-              开启智能模式后，可在此选择质量指标（SSIM / Butteraugli）。
+            <div class="metric-block">
+              <span class="metric-label">质量指标</span>
+              <div class="metric-radios" id="metricRadios" role="radiogroup" aria-label="质量指标">
+                <label class="metric-radio-row">
+                  <input type="radio" name="metric" value="ssim" checked disabled />
+                  <span class="metric-radio-text">
+                    <strong>SSIM</strong>
+                    <small>结构相似性，通用均衡</small>
+                  </span>
+                </label>
+                <label class="metric-radio-row">
+                  <input type="radio" name="metric" value="butteraugli" disabled />
+                  <span class="metric-radio-text">
+                    <strong>Butteraugli</strong>
+                    <small>人眼感知差异，体积更小</small>
+                  </span>
+                </label>
+                <label class="metric-radio-row">
+                  <input type="radio" name="metric" value="psnr" disabled />
+                  <span class="metric-radio-text">
+                    <strong>PSNR</strong>
+                    <small>峰值信噪比（dB），经典保真度指标</small>
+                  </span>
+                </label>
+              </div>
             </div>
           </div>
         </div>
@@ -1827,8 +1859,11 @@
       const toast = document.getElementById("toast");
       const smartMode = document.getElementById("smartMode");
       const smartOptions = document.getElementById("smartOptions");
-      const metricSelect = document.getElementById("metricSelect");
-      const metricDesc = document.getElementById("metricDesc");
+      const metricRadios = document.getElementById("metricRadios");
+      function getMetricValue() {
+        const checked = metricRadios.querySelector('input[name="metric"]:checked');
+        return checked ? checked.value : "ssim";
+      }
       const losslessMode = document.getElementById("losslessMode");
       const losslessDesc = document.getElementById("losslessDesc");
       const maxSizeInput = document.getElementById("maxSizeInput");
@@ -1837,12 +1872,6 @@
       const losslessRow = document.getElementById("losslessRow");
       const maxSizeBlock = document.getElementById("maxSizeBlock");
       const mutexNote = document.getElementById("mutexNote");
-      const METRIC_DESC = {};
-      METRIC_DESC.ssim = "SSIM：结构相似性，通用均衡";
-      METRIC_DESC.butteraugli = "Butteraugli：人眼感知差异，体积更小";
-      function updateMetricDesc() {
-        metricDesc.textContent = METRIC_DESC[metricSelect.value] || "";
-      }
       const formatGroup = document.getElementById("formatGroup");
       const themeToggle = document.getElementById("themeToggle");
       const dropAnalysis = document.getElementById("dropAnalysis");
@@ -2001,10 +2030,11 @@
       function updateSmartOptions() {
         const off = !state.smart;
         smartOptions.classList.toggle("dimmed", off);
-        metricSelect.disabled = off;
-        metricDesc.textContent = off
-          ? "开启智能模式后，可在此选择质量指标（SSIM / Butteraugli）。"
-          : METRIC_DESC[metricSelect.value] || "";
+        metricRadios.querySelectorAll('input[name="metric"]').forEach((r) => { r.disabled = off; });
+        if (!off) {
+          const target = metricRadios.querySelector(`input[name="metric"][value="${state.metric}"]`);
+          if (target) target.checked = true;
+        }
       }
       smartMode.addEventListener("change", () => {
         state.smart = smartMode.checked;
@@ -2027,9 +2057,9 @@
       rotateExifToggle.addEventListener("change", () => {
         state.rotateExif = rotateExifToggle.checked;
       });
-      metricSelect.addEventListener("change", () => {
-        state.metric = metricSelect.value;
-        updateMetricDesc();
+      metricRadios.addEventListener("change", (e) => {
+        if (e.target.name !== "metric") return;
+        state.metric = e.target.value;
       });
 
       // Drop zone events

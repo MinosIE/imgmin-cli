@@ -61,7 +61,7 @@ bin/cli.js ──import──▶ src/index.js        (CLI 入口 + 子命令定�
 | 转换 | `src/convert.js` | `convertImage` 及 per-format helper、`getSupportedFormats` | |
 | 工具 | `src/utils.js` | `glob`、`getImageInfo`、`formatFileSize`、`isImageFile`、`ensureDir`、`batchProcess` | 不含业务逻辑 |
 | 配置 | `src/config.js` | 读写 `~/.imgminrc`（JSON） | |
-| 智能 | `src/smart.js` | `analyzeImage`（主色/透明/类型→推荐格式）、`findOptimalQuality`（SSIM/Butteraugli 二分搜索）、`smartSuggest` | 纯本地，无 IO 依赖 UI |
+| 智能 | `src/smart.js` | `analyzeImage`（主色/透明/类型→推荐格式）、`findOptimalQuality`（SSIM/Butteraugli/PSNR 二分搜索）、`smartSuggest` | 纯本地，无 IO 依赖 UI |
 | Web 服务 | `src/ui.js` | express 服务、`/api/compress`、`/api/info`、`/api/download`、`/api/download-zip`、`/api/smart-analyze`、`startUIServer` | 不写前端样式 |
 | 前端 | `src/ui-public/index.html` | 单文件 SPA：拖放区 / 格式多选 / 质量滑块 / 智能开关 / 结果展示 | 无构建步骤，改完即生效 |
 | 测试 | `tests/*.test.js` | 模块单元测试 + CLI 端到端（`tests/helpers/images.js` 提供 sharp 现场生成的夹具） | 不写用户目录（config 用例用隔离 HOME 子进程） |
@@ -74,7 +74,7 @@ CLI 智能：`imgmin smart <src> → index.js → smartSuggest(file) → analyze
 - **纯 ESM**：`package.json` `"type": "module"`。禁止在 `src/*.js` 用 `require()`；archiver/chalk/ora 均为纯 ESM，必须用命名 `import`。
 - **无前端构建**：UI 是单个内联 HTML 文件，由 `express.static` 直接托管，修改后**重启服务**即生效，无编译。
 - **配置持久化**：`config.js` 读写 `~/.imgminrc`，CLI 选项与默认值合并（`getConfig()`）。
-- **智能模式指标为纯 JS 近似（已升级）**：`findOptimalQuality` 的 SSIM 仍是自实现简化版；Butteraugli 已升级为「CIELAB + 多尺度 + 暗部敏感 + 对比度掩蔽 + Minkowski 池化」的感知近似（非 Google 原生，但比早期 Rec.709 亮度加权更贴近真值），仅用于驱动质量二分，阈值 SSIM≥0.95 / Butteraugli≤1.2。曾于 2026-09-15 尝试引入 `@squoosh-kit/visdif`（WASM 真值）但因 Node 下 WASM 加载失败不可用，用户选定不引原生依赖、改为升级近似算法。
+- **智能模式指标为纯 JS 近似（已升级）**：`findOptimalQuality` 的 SSIM 仍是自实现简化版；Butteraugli 已升级为「CIELAB + 多尺度 + 暗部敏感 + 对比度掩蔽 + Minkowski 池化」的感知近似（非 Google 原生，但比早期 Rec.709 亮度加权更贴近真值），仅用于驱动质量二分，阈值 SSIM≥0.95 / Butteraugli≤1.2 / PSNR≥38dB；PSNR 为基于 RGB-MSE 的保真度指标（零新依赖），补全误差/结构/感知三类指标谱系。曾于 2026-09-15 尝试引入 `@squoosh-kit/visdif`（WASM 真值）但因 Node 下 WASM 加载失败不可用，用户选定不引原生依赖、改为升级近似算法。
 
 ## 2. 开发规则
 
@@ -82,7 +82,7 @@ CLI 智能：`imgmin smart <src> → index.js → smartSuggest(file) → analyze
 - **2.2 命名**：文件 kebab-case（`compress.js`）；函数 camelCase；导出函数用动词开头（`compressImage`、`analyzeImage`）。
 - **2.3 文件结构**：`src/*.js` 顶部 `import` → 导出函数（JSDoc 注释参数）→ 末尾无副作用（除 `index.js` 的 `program.parse()`）。
 - **2.4 模块拆分**：图像相关新增能力放 `compress.js`/`convert.js`；跨命令共享逻辑放 `utils.js`；不要在前端写复杂逻辑（保持单文件可读）。
-- **2.5 API 契约**：`/api/compress` 接收字段——`images`（multer 多文件）、`formats[]`（多选时）或 `format`（单格式）、`quality`、`smart`（`'1'` 时启用）、`metric`（`ssim`/`butteraugli`）。返回 `{ results: [{ success, format, savedPercent, outputPath, downloadUrl, ... , smart?, quality?, reason? }] }`。**前端 `index.html` 与 `ui.js` 的字段名必须同步。**
+- **2.5 API 契约**：`/api/compress` 接收字段——`images`（multer 多文件）、`formats[]`（多选时）或 `format`（单格式）、`quality`、`smart`（`'1'` 时启用）、`metric`（`ssim`/`butteraugli`/`psnr`）。返回 `{ results: [{ success, format, savedPercent, outputPath, downloadUrl, ... , smart?, quality?, reason? }] }`。**前端 `index.html` 与 `ui.js` 的字段名必须同步。**
 - **2.6 错误处理**：CLI 用 `ora` spinner + `try/catch` 打印 `chalk` 错误；UI 用 `express` 全局错误处理器（`ui.js` 末尾），multer 超限返回 413/400。
 - **2.7 日志**：CLI 走 `chalk`/`ora`；服务端错误 `console.error`（含 'Compress endpoint error' 等前缀），便于在终端复现。
 - **2.8 测试**：`npm test` = `node --test`，自动发现 `tests/*.test.js`；`tests/helpers/` 下的文件不会被当成用例（目录名是 `tests` 而非 `test`，只有 `*.test.js` 会被采集）。夹具在 `tests/helpers/images.js` 里用 sharp 现场生成，**不要提交二进制快照**。新增/修改功能必须同步补用例；涉及 `config.js` 的用例必须走子进程并设置隔离 `HOME`，禁止读写真实 `~/.imgminrc`。
@@ -164,7 +164,7 @@ CLI 智能：`imgmin smart <src> → index.js → smartSuggest(file) → analyze
 - 智能选格式 / 质量 → `src/smart.js`
 
 ## 5. 当前项目状态
-- **5.1 已完成**：CLI 全套命令（config/compress/webp/avif/convert/resize/info/ui/smart）；Web UI（拖放/文件夹/多选格式/质量滑块/Download All zip/防重 loading；单图分析卡 + 多图可删文件列表）；智能模式（内容感知格式 + SSIM/Butteraugli 自适应质量，CLI 与 UI 双入口）；宽屏布局（容器 1440px，结果双列网格）；批量并发可调（`-j, --concurrency`，1-32）；无损编码 `--lossless`（WebP/AVIF/TIFF 原生无损、PNG 拉满压缩、JPEG 退回最高质量，CLI 各命令 + UI「无损模式」开关双入口）；目标体积 `--max-size <size>`（CLI 各命令 + UI「目标体积」输入框双入口，经 `parseSizeToBytes` 解析，二分搜质量使产物 ≤ 目标体积）；元数据控制 `--strip` / `--rotate-exif`（引擎 `applyMeta` 先旋转后 `withMetadata()`，`keepMetadata` 默认保留；CLI 各命令 + UI「移除元数据 / 按 EXIF 自动旋转」开关双入口）；首批自动化测试（`tests/*.test.js`，模块 + CLI 端到端）。
+- **5.1 已完成**：CLI 全套命令（config/compress/webp/avif/convert/resize/info/ui/smart）；Web UI（拖放/文件夹/多选格式/质量滑块/Download All zip/防重 loading；单图分析卡 + 多图可删文件列表）；智能模式（内容感知格式 + SSIM/Butteraugli/PSNR 自适应质量，CLI 与 UI 双入口）；宽屏布局（容器 1440px，结果双列网格）；批量并发可调（`-j, --concurrency`，1-32）；无损编码 `--lossless`（WebP/AVIF/TIFF 原生无损、PNG 拉满压缩、JPEG 退回最高质量，CLI 各命令 + UI「无损模式」开关双入口）；目标体积 `--max-size <size>`（CLI 各命令 + UI「目标体积」输入框双入口，经 `parseSizeToBytes` 解析，二分搜质量使产物 ≤ 目标体积）；元数据控制 `--strip` / `--rotate-exif`（引擎 `applyMeta` 先旋转后 `withMetadata()`，`keepMetadata` 默认保留；CLI 各命令 + UI「移除元数据 / 按 EXIF 自动旋转」开关双入口）；首批自动化测试（`tests/*.test.js`，模块 + CLI 端到端）。
 - **5.2 开发中**：无。
 - **5.3 未完成计划**：Web UI 与 `/api/*` 端点已补端到端测试（`tests/http.test.js`，待本地执行验证）；批量目录智能模式在 CLI 的结果汇总未展示每张理由（仅打印到终端）。
 - **5.4 技术债务**：`findOptimalQuality` 的 Butteraugli 为感知近似（已升级为 CIELAB 多尺度加权，非 Google 原生精确实现；真值化因 Node 下无可用 WASM 依赖而搁置）；`processDirectory` 智能模式不写 `_compressed` 后缀（与常规模式命名不一致）；`resize` 对动图只取首帧（sharp 默认行为）。

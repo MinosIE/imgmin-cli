@@ -7,7 +7,7 @@ import fs from 'fs';
  * 两个能力：
  *  1) analyzeImage  — 内容感知格式选择：根据主色（是否照片/插画）、透明通道、
  *                     位深、尺寸等推断「最适合的格式」。
- *  2) findOptimalQuality — 自适应质量：以 SSIM/Butteraugli 指标驱动，二分搜索
+ *  2) findOptimalQuality — 自适应质量：以 SSIM/Butteraugli/PSNR 指标驱动，二分搜索
  *                     在「质量损失不超过阈值」前提下的最大压缩率（最小质量值）。
  */
 
@@ -47,6 +47,36 @@ async function computeSSIM(bufA, bufB) {
     const ssim = ((2 * mA * mB + C1) * (2 * cov + C2)) /
                  ((mA * mA + mB * mB + C1) * (vA + vB + C2));
     return Math.max(0, Math.min(1, ssim));
+  } catch {
+    return 0;
+  }
+}
+
+// 计算两张图之间的 PSNR（峰值信噪比，单位 dB），范围 0~∞，越大越好。
+// 基于 RGB 通道的 MSE 计算（忽略 alpha），MAX=255；极接近/相同时封顶 100 dB 避免 Infinity。
+export async function computePSNR(bufA, bufB) {
+  try {
+    const [imgA, imgB] = await Promise.all([
+      sharp(bufA).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
+      sharp(bufB).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
+    ]);
+    const { data: dA, info: iA } = imgA;
+    const { data: dB, info: iB } = imgB;
+    const total = Math.min(iA.width * iA.height, iB.width * iB.height);
+    if (total === 0) return 0;
+
+    // 仅比较 RGB 通道（忽略 alpha 差异）
+    let mse = 0;
+    const n = iA.width * iA.height;
+    for (let p = 0; p < n; p++) {
+      for (let c = 0; c < 3; c++) {
+        const d = dA[p * iA.channels + c] - dB[p * iB.channels + c];
+        mse += d * d;
+      }
+    }
+    mse /= total * 3;
+    if (mse <= 1e-9) return 100; // 几乎无损，封顶避免 Infinity
+    return 10 * Math.log10((255 * 255) / mse);
   } catch {
     return 0;
   }
@@ -250,8 +280,8 @@ export async function analyzeImage(inputPath) {
  * @param {string} inputPath 原图路径
  * @param {Object} opts
  * @param {string} opts.format 目标格式
- * @param {string} opts.metric 'ssim' | 'butteraugli'
- * @param {number} opts.threshold 指标阈值（SSIM: 默认 0.95；Butteraugli: 默认 1.2）
+ * @param {string} opts.metric 'ssim' | 'butteraugli' | 'psnr'
+ * @param {number} opts.threshold 指标阈值（SSIM: 默认 0.95；Butteraugli: 默认 1.2；PSNR: 默认 38 dB）
  * @param {number} opts.maxQuality 起点质量（默认 82）
  * @returns {Promise<{quality, metric, score, compressedSize, originalSize, savedPercent}>}
  */
@@ -259,12 +289,13 @@ export async function findOptimalQuality(inputPath, opts = {}) {
   const {
     format = 'webp',
     metric = 'ssim',
-    threshold = metric === 'ssim' ? 0.95 : 1.2,
+    threshold = metric === 'ssim' ? 0.95 : metric === 'butteraugli' ? 1.2 : 38,
     maxQuality = 82,
   } = opts;
 
   const originalBuf = fs.readFileSync(inputPath);
   let originalLab = null; // Butteraugli 比较时懒解码一次复用
+  const higherBetter = metric !== 'butteraugli'; // SSIM / PSNR 越大越好，Butteraugli 越小越好
 
   const encode = async (q) => {
     let pipeline = sharp(originalBuf);
@@ -283,13 +314,16 @@ export async function findOptimalQuality(inputPath, opts = {}) {
       if (!originalLab) originalLab = await toLabPlanes(originalBuf);
       return { value: butteraugliDistance(originalLab, await toLabPlanes(compBuf)), better: 'low' };
     }
+    if (metric === 'psnr') {
+      return { value: await computePSNR(originalBuf, compBuf), better: 'high' };
+    }
     return { value: await computeSSIM(originalBuf, compBuf), better: 'high' };
   };
 
   // 先确认最高质量是否满足阈值（兜底）
   const bestBuf = await encode(maxQuality);
   const bestScore = await measure(bestBuf);
-  const meetsAtMax = metric === 'ssim'
+  const meetsAtMax = higherBetter
     ? bestScore.value >= threshold
     : bestScore.value <= threshold;
 
@@ -313,7 +347,7 @@ export async function findOptimalQuality(inputPath, opts = {}) {
     const mid = Math.floor((lo + hi) / 2);
     const buf = await encode(mid);
     const { value } = await measure(buf);
-    const meets = metric === 'ssim' ? value >= threshold : value <= threshold;
+    const meets = higherBetter ? value >= threshold : value <= threshold;
     if (meets) {
       chosenQ = mid; chosenBuf = buf; chosenScore = value;
       hi = mid - 1; // 尝试更低质量

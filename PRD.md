@@ -22,7 +22,7 @@
 ### 1.4 核心价值主张
 - **双形态**：同一引擎，CLI 批量 + 浏览器拖拽。
 - **现代格式优先**：WebP / AVIF 一等公民，JPEG / PNG / TIFF / GIF 等兼容。
-- **智能模式**：自动判断「照片 / 图标 / 透明图 / 纯色图」并选格式、用 SSIM / Butteraugli 二分搜索最优质量。
+- **智能模式**：自动判断「照片 / 图标 / 透明图 / 纯色图」并选格式、用 SSIM / Butteraugli / PSNR 二分搜索最优质量。
 - **安全不破坏**：压缩后更大自动跳过 / 保留原图；不擅自删除源文件（除非 `--force`）。
 - **可配置**：`~/.imgminrc` 持久化默认质量 / 格式等。
 
@@ -69,7 +69,7 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 |---|---|---|
 | CLI | 默认批量命令 / config / compress(c) / smart / webp / avif / convert / resize / info / ui | 已实现 |
 | Web UI | 拖拽上传、文件夹上传、格式多选、质量滑块、智能开关、单图压缩潜力分析、结果卡片、Download All(zip) | 已实现 |
-| 智能模式 | 内容感知选格式 + SSIM/Butteraugli 自适应质量 | 已实现（Butteraugli 为近似，规划真值化见 §11.2） |
+| 智能模式 | 内容感知选格式 + SSIM/Butteraugli/PSNR 自适应质量 | 已实现（Butteraugli 为近似，规划真值化见 §11.2） |
 | 模块 API | `compressImage` / `resizeImage` / `convertImage` / `getImageInfo` / `glob` 等 | 已实现 |
 | 批量并发 | `-j, --concurrency`（1-32，默认 4） | 已实现 |
 | 自动化测试 | `npm test`（`node --test`，`tests/*.test.js` 单元 + CLI 端到端） | 已实现（首批） |
@@ -106,7 +106,7 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
   - `--no-webp`（不生成 WebP 版本）
   - `--force`（替换原文件，无 `_compressed` 后缀）
   - `-j, --concurrency <n>`（目录并发数，默认 4，上限 32）
-  - `--smart`、`--metric <ssim|butteraugli>`、`--threshold <n>`（智能模式）
+  - `--smart`、`--metric <ssim|butteraugli|psnr>`、`--threshold <n>`（智能模式）
 - 输出行为：
   - 无 output：同目录生成 `<filename>_compressed.<ext>` + `<filename>.webp`（除非 `--no-webp`）。
   - 有 output：输出到文件/目录。
@@ -192,6 +192,7 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 - 指标：
   - **SSIM（默认）**：自实现简化版（亮度通道高斯近似），阈值 `≥0.95`，越大越好。
   - **Butteraugli（真值化规划中）**：感知加权逐像素色差，暗部更敏感，阈值 `≤1.2`，越小越好。当前为自实现近似；规划改用 `@squoosh-kit/visdif`（Emscripten/WASM 版 Google Butteraugli）计算真实分数，见 §11.2 / §13。
+  - **PSNR**：基于 RGB 通道 MSE 的峰值信噪比（dB），阈值 `≥38`，越大越好；零新依赖，补全「误差 / 结构 / 感知」三类指标谱系。
 - 上限质量仍不达标时退回最高质量。
 
 ### 6.3 一体化 `smartSuggest`
@@ -205,7 +206,7 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 
 ### 7.1 页面结构
 - 拖放区（支持点击选文件 / 选文件夹；递归遍历文件夹用 `webkitGetAsEntry`）。
-- 设置面板：格式多选（WebP / AVIF / JPEG / PNG / 原格式）、质量滑块、智能模式开关（含指标下拉 SSIM/Butteraugli）。
+- 设置面板：格式多选（WebP / AVIF / JPEG / PNG / 原格式）、质量滑块、智能模式开关（含指标下拉 SSIM/Butteraugli/PSNR）。
 - 压缩按钮 + 进度条。
 - 结果区：统计摘要卡（图片×格式 / 输出数 / 总节省%）+ 每张原图的结果卡片（含各格式 chip、智能理由）。
 - 主题切换（深色 / 浅色，localStorage 记忆）。
