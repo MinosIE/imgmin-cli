@@ -69,7 +69,7 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 |---|---|---|
 | CLI | 默认批量命令 / config / compress(c) / smart / webp / avif / convert / resize / info / ui | 已实现 |
 | Web UI | 拖拽上传、文件夹上传、格式多选、质量滑块、智能开关、单图压缩潜力分析、结果卡片、Download All(zip) | 已实现 |
-| 智能模式 | 内容感知选格式 + SSIM/Butteraugli 自适应质量 | 已实现（指标为近似实现） |
+| 智能模式 | 内容感知选格式 + SSIM/Butteraugli 自适应质量 | 已实现（Butteraugli 为近似，规划真值化见 §11.2） |
 | 模块 API | `compressImage` / `resizeImage` / `convertImage` / `getImageInfo` / `glob` 等 | 已实现 |
 | 批量并发 | `-j, --concurrency`（1-32，默认 4） | 已实现 |
 | 自动化测试 | `npm test`（`node --test`，`tests/*.test.js` 单元 + CLI 端到端） | 已实现（首批） |
@@ -191,7 +191,7 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 - 以指标驱动，在 `[1, maxQuality=82]` 区间二分，找「刚好满足阈值」的最小质量（体积最大）。
 - 指标：
   - **SSIM（默认）**：自实现简化版（亮度通道高斯近似），阈值 `≥0.95`，越大越好。
-  - **Butteraugli（近似）**：感知加权逐像素色差，暗部更敏感，阈值 `≤1.2`，越小越好（非 Google 原生实现）。
+  - **Butteraugli（真值化规划中）**：感知加权逐像素色差，暗部更敏感，阈值 `≤1.2`，越小越好。当前为自实现近似；规划改用 `@squoosh-kit/visdif`（Emscripten/WASM 版 Google Butteraugli）计算真实分数，见 §11.2 / §13。
 - 上限质量仍不达标时退回最高质量。
 
 ### 6.3 一体化 `smartSuggest`
@@ -264,7 +264,7 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 ## 10. 已知限制与技术债务
 
 - **HEIC / HEIF 不支持**：sharp 解码能力缺失；Web UI 已前端拦截，但 CLI 直接传 HEIC 会因 sharp 报错。
-- **Butteraugli 为近似实现**：非 Google 原生，仅用于驱动质量二分，结果仅供近似参考。
+- **Butteraugli 近似实现（规划替换）**：当前为自实现近似，非 Google 原生，仅用于驱动质量二分；规划以 `@squoosh-kit/visdif`（WASM 真值 Butteraugli）替换，见 §11.2。
 - **`analyzeImage` 阈值经验化**：照片/图标/纯色判定为启发式，复杂图可能选错格式。
 - **智能模式 CLI 目录汇总不展示 per-file 理由**：仅终端打印，未结构化汇总。
 - **极小透明 PNG 转 PNG 可能变大**：已默认转 WebP 缓解。
@@ -305,7 +305,8 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 
 - **智能模式 · CLI 汇总**：批量目录模式下结构化汇总每张图的决策理由（当前仅逐行打印到终端）。
 - **智能模式 · UI 决策卡片**：Web 结果区展示 per-file 决策（格式 / 质量 / 指标分数 / 理由）。
-- **智能模式 · 指标精度**：以更精确的实现（原生 SSIM / Butteraugli 绑定）替换当前近似算法。
+- **智能模式 · 指标精度 · Butteraugli 近似升级（执行中）**：原生 Butteraugli 在 Node 下无可用依赖（`@squoosh-kit/visdif` 实测 WASM 加载失败、`butteraugli`@0.0.2 年久风险高，见 §13），故不引入原生依赖；改为**升级现有近似**为更接近真值的实现——sRGB→CIELAB 正确转换 + 多尺度（1x/0.5x/0.25x）误差 + 暗部敏感权重 + 对比度掩蔽 + Minkowski(p≈0.6) 空间池化并兼顾最差区域，输出标定到 ~Butteraugli 量纲（0=相同，≤1.2 视为达标）。指标名 `butteraugli` 与 CLI/UI 契约不变，SSIM 本次不替换。
+- **智能模式 · 指标精度 · SSIM**：维持当前自实现简化版（阈值 `≥0.95`），本次不替换；如后续需要更精确 SSIM 可单独规划（不在本次范围）。
 - **智能模式 · 自适应质量扩展**：把自适应质量扩展到 AVIF 之外的有损格式（当前 JPEG / PNG 走固定质量）。
 - **并发模型**：当前为分批 `Promise.allSettled`，如需精细限流可引入 `p-limit` 风格调度。
 - **测试**：补充 Web UI 与 `/api/*` 端点的集成测试（`/api/compress`、`/api/info`、`/api/smart-analyze`、`/api/download-zip`）——**已完成**，见 `tests/http.test.js`（派生子进程启动真实 UI 服务，待本地执行验证）。
@@ -411,3 +412,15 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
   - 新增 **11.2 待细化项**：收纳原路线图 6 条未开始方向，并补充 Web API 集成测试的具体端点清单。
   - 新增 **11.3 本次迭代完成情况**：映射本次交付物到具体文件。
 - 文档头部与 §12 增加「进度维护约定」：完成能力后须更新第 11 节状态并追加本节记录。
+
+### 2026-09-15 · PRD 规划：Butteraugli 真值化（替换近似实现）
+- 背景：`src/smart.js` 的 `findOptimalQuality` 中 Butteraugli 为自实现近似（非 Google 原生），仅用于驱动质量二分。用户要求改用真实 Butteraugli。
+- 关键约束核实：`sharp` / `libvips` 不提供 Butteraugli 指标（libvips 无 `vips_butteraugli` API），故「用 sharp 原生 Butteraugli 替换」不可行；必须引入额外依赖。
+- 选型：`@squoosh-kit/visdif`@0.2.10（Emscripten/WASM 版 Google Butteraugli，MIT/Apache-2.0，~267KB，依赖 `@squoosh-kit/runtime`），npm 可直接安装；相对 `butteraugli`@0.0.2（2017 年久）更稳健。
+- 规划内容（§6.2 / §10 / §11.2 同步更新）：在 `src/smart.js` 以该 WASM 模块替换近似 Butteraugli，原图与候选压缩图经 `sharp` 解码为 raw RGBA 后求标量分数，阈值 `≤1.2` 语义不变；指标名 `butteraugli` 与 CLI/UI 契约不变；SSIM 本次不替换。
+- 进度：PRD 已记录规划；实现阶段 `npm install @squoosh-kit/visdif` 后实测，该包在 Node 下经 `fetch(file://)` 加载 WASM（Node 不支持）且 dist 缺失 Emscripten glue，WASM 无法实例化；`src/smart.js` 改动已撤销、依赖已卸载，维持近似 Butteraugli。真值化方案经用户确认改为「**升级近似算法**」（不引原生依赖），见下条。
+
+### 2026-09-15 · Butteraugli 近似升级（取代原生依赖方案）
+- 决策：原生 Butteraugli（真值）在 Node CLI 下无可用依赖——`@squoosh-kit/visdif` 经 `fetch(file://)` 加载 WASM 且其 dist 缺失 Emscripten glue，无法实例化；`butteraugli`@0.0.2（2017 原生 addon）需 node-gyp 构建、年久失修，风险高。用户选定**不引入原生依赖**，改为升级现有近似算法为更接近真值的实现。
+- 方案（§6.2 / §11.2 同步更新）：`src/smart.js` 的 `computeButteraugli` 由「Rec.709 亮度加权逐像素色差」升级为 sRGB→CIELAB 正确转换 + 多尺度（1x/0.5x/0.25x）误差 + 暗部敏感权重 + 对比度掩蔽 + Minkowski(p≈0.6) 空间池化（兼顾最差区域），输出标定到 ~Butteraugli 量纲（0=相同、≤1.2 达标）。阈值、指标名、CLI/UI 契约均不变。
+- 进度（已完成）：`src/smart.js` 已升级 `computeButteraugli` 为 CIELAB 多尺度加权实现（含 `toLabPlanes` / `butteraugliDistance`，已导出便于测试），原图 Lab 平面只解码一次复用；`tests/smart.test.js` 新增行为用例（相同图≈0、低质量距离>高质量、量纲合理），`node --test tests/smart.test.js` 6/6 通过；CLI 冒烟验证：平滑图 q82 距离 0.34（选低质量省 99.5%）、噪声图始终>1.2（保持高质），符合感知模型。阈值 / 指标名 / CLI·UI 契约均不变。

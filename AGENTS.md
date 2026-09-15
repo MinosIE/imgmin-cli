@@ -74,7 +74,7 @@ CLI 智能：`imgmin smart <src> → index.js → smartSuggest(file) → analyze
 - **纯 ESM**：`package.json` `"type": "module"`。禁止在 `src/*.js` 用 `require()`；archiver/chalk/ora 均为纯 ESM，必须用命名 `import`。
 - **无前端构建**：UI 是单个内联 HTML 文件，由 `express.static` 直接托管，修改后**重启服务**即生效，无编译。
 - **配置持久化**：`config.js` 读写 `~/.imgminrc`，CLI 选项与默认值合并（`getConfig()`）。
-- **智能模式指标为纯 JS 近似**：`findOptimalQuality` 的 SSIM 是自实现简化版；Butteraugli 是感知加权色差近似（非 Google 原生实现），仅用于驱动质量二分，阈值 SSIM≥0.95 / Butteraugli≤1.2。
+- **智能模式指标为纯 JS 近似（已升级）**：`findOptimalQuality` 的 SSIM 仍是自实现简化版；Butteraugli 已升级为「CIELAB + 多尺度 + 暗部敏感 + 对比度掩蔽 + Minkowski 池化」的感知近似（非 Google 原生，但比早期 Rec.709 亮度加权更贴近真值），仅用于驱动质量二分，阈值 SSIM≥0.95 / Butteraugli≤1.2。曾于 2026-09-15 尝试引入 `@squoosh-kit/visdif`（WASM 真值）但因 Node 下 WASM 加载失败不可用，用户选定不引原生依赖、改为升级近似算法。
 
 ## 2. 开发规则
 
@@ -167,7 +167,7 @@ CLI 智能：`imgmin smart <src> → index.js → smartSuggest(file) → analyze
 - **5.1 已完成**：CLI 全套命令（config/compress/webp/avif/convert/resize/info/ui/smart）；Web UI（拖放/文件夹/多选格式/质量滑块/Download All zip/防重 loading；单图分析卡 + 多图可删文件列表）；智能模式（内容感知格式 + SSIM/Butteraugli 自适应质量，CLI 与 UI 双入口）；宽屏布局（容器 1440px，结果双列网格）；批量并发可调（`-j, --concurrency`，1-32）；无损编码 `--lossless`（WebP/AVIF/TIFF 原生无损、PNG 拉满压缩、JPEG 退回最高质量，CLI 各命令 + UI「无损模式」开关双入口）；目标体积 `--max-size <size>`（CLI 各命令 + UI「目标体积」输入框双入口，经 `parseSizeToBytes` 解析，二分搜质量使产物 ≤ 目标体积）；元数据控制 `--strip` / `--rotate-exif`（引擎 `applyMeta` 先旋转后 `withMetadata()`，`keepMetadata` 默认保留；CLI 各命令 + UI「移除元数据 / 按 EXIF 自动旋转」开关双入口）；首批自动化测试（`tests/*.test.js`，模块 + CLI 端到端）。
 - **5.2 开发中**：无。
 - **5.3 未完成计划**：Web UI 与 `/api/*` 端点已补端到端测试（`tests/http.test.js`，待本地执行验证）；批量目录智能模式在 CLI 的结果汇总未展示每张理由（仅打印到终端）。
-- **5.4 技术债务**：`findOptimalQuality` 的 Butteraugli 为近似实现，非 Google 原生；`processDirectory` 智能模式不写 `_compressed` 后缀（与常规模式命名不一致）；`resize` 对动图只取首帧（sharp 默认行为）。
+- **5.4 技术债务**：`findOptimalQuality` 的 Butteraugli 为感知近似（已升级为 CIELAB 多尺度加权，非 Google 原生精确实现；真值化因 Node 下无可用 WASM 依赖而搁置）；`processDirectory` 智能模式不写 `_compressed` 后缀（与常规模式命名不一致）；`resize` 对动图只取首帧（sharp 默认行为）。
 - **5.5 已知问题**：极小透明 PNG 转 PNG 可能变大（已改为默认转 WebP 缓解）；并发批处理为「分批 `Promise.allSettled`」，不是精细限流（单批内会同时启动 `concurrency` 个任务）。
 - **5.6 路线图**：Web API 集成测试；`--json`/`--dry-run` 输出；智能模式结果在 UI 汇总卡片展示 per-file 决策；支持 AVIF 之外的有损格式自适应。
 

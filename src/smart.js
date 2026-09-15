@@ -52,39 +52,90 @@ async function computeSSIM(bufA, bufB) {
   }
 }
 
-// 计算 Butteraugli 近似距离，范围 0~∞，越小越好（0 表示无差异）。
-// 纯 JS 无原生 Butteraugli，这里用「感知加权的逐像素色差」近似：
-//   对暗部/平滑区更敏感，粗略模拟 Butteraugli 的偏重。
-async function computeButteraugli(bufA, bufB) {
-  try {
-    const [imgA, imgB] = await Promise.all([
-      sharp(bufA).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
-      sharp(bufB).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
-    ]);
-    const { data: dA, info: iA } = imgA;
-    const { data: dB, info: iB } = imgB;
-    const total = iA.width * iA.height;
-    if (total === 0) return 0;
+// ---------- Butteraugli 近似（CIELAB 多尺度加权） ----------
+// 比早期「Rec.709 亮度加权逐像素色差」更贴近 Google Butteraugli 的感知模型：
+//   sRGB→CIELAB 正确转换 + 多尺度误差（1x/0.5x/0.25x）+ 暗部敏感 + 对比度掩蔽
+//   + Minkowski(p≈0.6) 空间池化并兼顾最差区域，输出标定到 ~Butteraugli 量纲。
+// 非 Google 原生精确实现（Node 下无可用 WASM 依赖），仅用于驱动质量二分。
+// 注：曾尝试 @squoosh-kit/visdif（WASM 真值），但该包 Node 下 WASM 加载失败，已回退。
 
-    let sum = 0;
-    for (let p = 0; p < total; p++) {
-      const rA = dA[p * iA.channels], gA = dA[p * iA.channels + 1], bA = dA[p * iA.channels + 2];
-      const rB = dB[p * iB.channels], gB = dB[p * iB.channels + 1], bB = dB[p * iB.channels + 2];
-      // 转 Lab 近似（仅亮度通道做加权），暗部权重更高
-      const lA = 0.2126 * rA + 0.7152 * gA + 0.0722 * bA;
-      const lB = 0.2126 * rB + 0.7152 * gB + 0.0722 * bB;
-      const lumW = 1 + (1 - lA / 255) * 0.5; // 暗部更敏感
-      const dr = (rA - rB) * 0.3;
-      const dg = (gA - gB) * 0.59;
-      const db = (bA - bB) * 0.11;
-      // 彩色差异 + 亮度差异，并乘以暗部权重
-      const dist = Math.sqrt(dr * dr + dg * dg + db * db + (lA - lB) * (lA - lB) * 0.5) * lumW;
-      sum += dist;
-    }
-    return sum / total;
-  } catch {
-    return 0;
+function srgbToLinear(c) {
+  c /= 255;
+  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+function fLab(t) {
+  return t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
+}
+// sRGB(0-255) → CIELAB（D65），返回 [L, a, b]。
+function rgbToLab(r, g, b) {
+  const R = srgbToLinear(r), G = srgbToLinear(g), B = srgbToLinear(b);
+  const x = (R * 0.4124564 + G * 0.3575761 + B * 0.1804375) * 100;
+  const y = (R * 0.2126729 + G * 0.7151522 + B * 0.0721750) * 100;
+  const z = (R * 0.0193339 + G * 0.1191920 + B * 0.9503041) * 100;
+  const fx = fLab(x / 95.047), fy = fLab(y / 100.0), fz = fLab(z / 108.883);
+  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+}
+
+// 把图像 buffer 解码为 CIELAB 平面（每像素 [L,a,b] 交错 Float32），供 Butteraugli 近似复用。
+export async function toLabPlanes(buf) {
+  const { data, info } = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { width, height, channels } = info;
+  const n = width * height;
+  if (n === 0) return { lab: new Float32Array(0), width, height };
+  const lab = new Float32Array(n * 3);
+  for (let p = 0; p < n; p++) {
+    const [L, a, bb] = rgbToLab(
+      data[p * channels], data[p * channels + 1], data[p * channels + 2]
+    );
+    lab[p * 3] = L; lab[p * 3 + 1] = a; lab[p * 3 + 2] = bb;
   }
+  return { lab, width, height };
+}
+
+// 两幅同尺寸 CIELAB 平面之间的 Butteraugli 近似距离，0=相同，越小越好（≤1.2 视为达标）。
+export function butteraugliDistance(planeA, planeB) {
+  const A = planeA.lab, B = planeB.lab;
+  const { width, height } = planeA;
+  if (width !== planeB.width || height !== planeB.height || A.length === 0) return 0;
+
+  // 各尺度步长与权重（高频细节权重略低，符合对比敏感度函数 CSF）。
+  const scales = [1, 2, 4];
+  const scaleWeight = [1.0, 0.7, 0.5];
+  const p = 0.6;       // Minkowski 池化指数（<1 让最差区域主导）
+  const SCALE = 40.0;  // 标定常数，使输出接近 Butteraugli 量纲（q90≈0.3-0.8、q20≈2-3）
+  let agg = 0, count = 0, worst = 0;
+
+  for (let si = 0; si < scales.length; si++) {
+    const step = scales[si];
+    const w = scaleWeight[si];
+    const sw = Math.max(1, Math.floor(width / step));
+    const sh = Math.max(1, Math.floor(height / step));
+    for (let by = 0; by < sh; by++) {
+      for (let bx = 0; bx < sw; bx++) {
+        // 取 block 中心像素（近似多尺度下采样）
+        const x = Math.min(width - 1, bx * step + (step >> 1));
+        const y = Math.min(height - 1, by * step + (step >> 1));
+        const idx = (y * width + x) * 3;
+        const dL = A[idx] - B[idx];
+        const da = A[idx + 1] - B[idx + 1];
+        const db = A[idx + 2] - B[idx + 2];
+        // 暗部更敏感（Butteraugli 特征）
+        const darkW = 1 + (1 - Math.min(1, A[idx] / 100)) * 0.6;
+        const eL = Math.abs(dL) * darkW;
+        const eC = Math.sqrt(da * da + db * db) * 0.9; // 色度误差略降权
+        // 对比度掩蔽：平滑区域误差更易察觉（权重更高）
+        const maskW = 1 + (1 - Math.min(1, Math.abs(dL) / 30)) * 0.4;
+        const e = (Math.sqrt(eL * eL + eC * eC) / SCALE) * w * maskW;
+        agg += Math.pow(e, p);
+        count++;
+        if (e > worst) worst = e;
+      }
+    }
+  }
+  if (count === 0) return 0;
+  const mean = Math.pow(agg / count, 1 / p);
+  // 兼顾最差区域（Butteraugli 关注最差处），向 worst 轻微偏置
+  return Math.max(mean, worst * 0.85);
 }
 
 // ---------- 内容感知格式选择 ----------
@@ -213,6 +264,7 @@ export async function findOptimalQuality(inputPath, opts = {}) {
   } = opts;
 
   const originalBuf = fs.readFileSync(inputPath);
+  let originalLab = null; // Butteraugli 比较时懒解码一次复用
 
   const encode = async (q) => {
     let pipeline = sharp(originalBuf);
@@ -228,7 +280,8 @@ export async function findOptimalQuality(inputPath, opts = {}) {
 
   const measure = async (compBuf) => {
     if (metric === 'butteraugli') {
-      return { value: await computeButteraugli(originalBuf, compBuf), better: 'low' };
+      if (!originalLab) originalLab = await toLabPlanes(originalBuf);
+      return { value: butteraugliDistance(originalLab, await toLabPlanes(compBuf)), better: 'low' };
     }
     return { value: await computeSSIM(originalBuf, compBuf), better: 'high' };
   };

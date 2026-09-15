@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { analyzeImage, smartSuggest, findOptimalQuality } from '../src/smart.js';
+import fs from 'node:fs';
+import sharp from 'sharp';
+import { analyzeImage, smartSuggest, findOptimalQuality, butteraugliDistance, toLabPlanes } from '../src/smart.js';
 import { makeTempDir, createSolidImage, createNoisyImage, createAlphaImage } from './helpers/images.js';
 
 const SUPPORTED_FORMATS = ['webp', 'png', 'avif'];
@@ -78,4 +80,24 @@ test('findOptimalQuality: 支持 butteraugli 指标并返回指标名', async ()
   // savedPercent 应与 originalSize / compressedSize 自洽
   const expected = Number(((result.originalSize - result.compressedSize) / result.originalSize * 100).toFixed(1));
   assert.equal(Number(result.savedPercent), expected);
+});
+
+test('butteraugli: 相同图距离≈0，低质量距离 > 高质量距离（CIELAB 多尺度加权）', async () => {
+  const dir = makeTempDir();
+  const file = await createNoisyImage(path.join(dir, 'photo.png'), { width: 96, height: 96 });
+  const orig = await toLabPlanes(fs.readFileSync(file));
+
+  const lowQ = await sharp(fs.readFileSync(file)).webp({ quality: 20 }).toBuffer();
+  const highQ = await sharp(fs.readFileSync(file)).webp({ quality: 90 }).toBuffer();
+
+  const dSame = butteraugliDistance(orig, orig);
+  const dLow = butteraugliDistance(orig, await toLabPlanes(lowQ));
+  const dHigh = butteraugliDistance(orig, await toLabPlanes(highQ));
+
+  assert.ok(Math.abs(dSame) < 1e-6, `相同图距离应≈0，实际 ${dSame}`);
+  assert.ok(dLow > dHigh, `低质量距离(${dLow.toFixed(3)}) 应大于高质量(${dHigh.toFixed(3)})`);
+  assert.ok(dHigh >= 0 && dLow >= 0, '距离应非负');
+  // 量纲标定：高质量压缩应处于「几乎无感」区间（<1.2），重度压缩应明显更大
+  assert.ok(dHigh < 1.2, `高质量 webp 距离应 < 1.2（达标），实际 ${dHigh.toFixed(3)}`);
+  assert.ok(dLow > dHigh * 1.5, `重度压缩距离应显著大于高质量，实际 low=${dLow.toFixed(3)} high=${dHigh.toFixed(3)}`);
 });
