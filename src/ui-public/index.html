@@ -1,1969 +1,2559 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>imgmin — 图片优化工作室</title>
-  <link rel="icon" href="/favicon.ico">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    
-    :root {
-      --bg-deep: #0a0a0c;
-      --bg: #121215;
-      --bg-card: #1a1a1f;
-      --bg-card-hover: #222228;
-      --bg-elevated: #2a2a32;
-      --border: #2e2e38;
-      --border-light: #3a3a44;
-      --text: #e8e8ec;
-      --text-secondary: #8888a0;
-      --text-muted: #5a5a70;
-      --accent: #e8a832;
-      --accent-glow: rgba(232, 168, 50, 0.15);
-      --accent-dim: #b07820;
-      --success: #32d878;
-      --success-glow: rgba(50, 216, 120, 0.12);
-      --error: #e84848;
-      --error-glow: rgba(232, 72, 72, 0.12);
-      --warning: #e8a832;
-      --radius-sm: 6px;
-      --radius: 10px;
-      --radius-lg: 14px;
-      --radius-xl: 20px;
-      --shadow-sm: 0 2px 8px rgba(0,0,0,0.3);
-      --shadow: 0 4px 16px rgba(0,0,0,0.4);
-      --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
-      --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      --font-display: 'Outfit', sans-serif;
-      --font-body: 'DM Sans', sans-serif;
-    }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>imgmin — 图片优化工作室</title>
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
 
-    /* Light theme (黑白切换) */
-    [data-theme="light"] {
-      --bg-deep: #f4f4f7;
-      --bg: #ffffff;
-      --bg-card: #ffffff;
-      --bg-card-hover: #f1f1f5;
-      --bg-elevated: #ececf2;
-      --border: #e2e2ea;
-      --border-light: #d2d2dc;
-      --text: #1a1a20;
-      --text-secondary: #5f5f70;
-      --text-muted: #9a9aac;
-      --accent: #c9851a;
-      --accent-glow: rgba(201,133,26,0.12);
-      --accent-dim: #a06d12;
-      --success: #1a9e52;
-      --success-glow: rgba(26,158,82,0.10);
-      --error: #d23a3a;
-      --error-glow: rgba(210,58,58,0.10);
-      --warning: #c9851a;
-      --shadow-sm: 0 2px 8px rgba(0,0,0,0.06);
-      --shadow: 0 4px 16px rgba(0,0,0,0.08);
-      --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
-    }
+      :root {
+        --bg-deep: #0a0a0c;
+        --bg: #121215;
+        --bg-card: #1a1a1f;
+        --bg-card-hover: #222228;
+        --bg-elevated: #2a2a32;
+        --border: #2e2e38;
+        --border-light: #3a3a44;
+        --text: #e8e8ec;
+        --text-secondary: #8888a0;
+        --text-muted: #5a5a70;
+        --accent: #e8a832;
+        --accent-glow: rgba(232, 168, 50, 0.15);
+        --accent-dim: #b07820;
+        --success: #32d878;
+        --success-glow: rgba(50, 216, 120, 0.12);
+        --error: #e84848;
+        --error-glow: rgba(232, 72, 72, 0.12);
+        --warning: #e8a832;
+        --radius-sm: 6px;
+        --radius: 10px;
+        --radius-lg: 14px;
+        --radius-xl: 20px;
+        --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+        --shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+        --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        --font-display: "Outfit", sans-serif;
+        --font-body: "DM Sans", sans-serif;
+      }
 
-    html { font-size: 16px; }
-    body {
-      background: var(--bg-deep);
-      color: var(--text);
-      font-family: var(--font-body);
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
+      /* Light theme (黑白切换) */
+      [data-theme="light"] {
+        --bg-deep: #f4f4f7;
+        --bg: #ffffff;
+        --bg-card: #ffffff;
+        --bg-card-hover: #f1f1f5;
+        --bg-elevated: #ececf2;
+        --border: #e2e2ea;
+        --border-light: #d2d2dc;
+        --text: #1a1a20;
+        --text-secondary: #5f5f70;
+        --text-muted: #9a9aac;
+        --accent: #c9851a;
+        --accent-glow: rgba(201, 133, 26, 0.12);
+        --accent-dim: #a06d12;
+        --success: #1a9e52;
+        --success-glow: rgba(26, 158, 82, 0.1);
+        --error: #d23a3a;
+        --error-glow: rgba(210, 58, 58, 0.1);
+        --warning: #c9851a;
+        --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
+        --shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+        --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
+      }
 
-    /* Background atmosphere */
-    body::before {
-      content: '';
-      position: fixed;
-      top: -30%; left: -10%;
-      width: 60%; height: 60%;
-      background: radial-gradient(ellipse, var(--accent-glow), transparent 70%);
-      pointer-events: none;
-      z-index: 0;
-    }
-    body::after {
-      content: '';
-      position: fixed;
-      bottom: -20%; right: -10%;
-      width: 50%; height: 50%;
-      background: radial-gradient(ellipse, rgba(50,216,120,0.06), transparent 70%);
-      pointer-events: none;
-      z-index: 0;
-    }
+      html {
+        font-size: 16px;
+      }
+      body {
+        background: var(--bg-deep);
+        color: var(--text);
+        font-family: var(--font-body);
+        min-height: 100vh;
+        overflow-x: hidden;
+      }
 
-    /* Noise texture overlay */
-    .noise-overlay {
-      position: fixed; inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
-      pointer-events: none;
-      z-index: 0;
-    }
+      /* Background atmosphere */
+      body::before {
+        content: "";
+        position: fixed;
+        top: -30%;
+        left: -10%;
+        width: 60%;
+        height: 60%;
+        background: radial-gradient(
+          ellipse,
+          var(--accent-glow),
+          transparent 70%
+        );
+        pointer-events: none;
+        z-index: 0;
+      }
+      body::after {
+        content: "";
+        position: fixed;
+        bottom: -20%;
+        right: -10%;
+        width: 50%;
+        height: 50%;
+        background: radial-gradient(
+          ellipse,
+          rgba(50, 216, 120, 0.06),
+          transparent 70%
+        );
+        pointer-events: none;
+        z-index: 0;
+      }
 
-    .app-container {
-      position: relative;
-      z-index: 1;
-      max-width: 1440px;
-      margin: 0 auto;
-      padding: 32px 24px 64px;
-    }
+      /* Noise texture overlay */
+      .noise-overlay {
+        position: fixed;
+        inset: 0;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+        pointer-events: none;
+        z-index: 0;
+      }
 
-    /* Header */
-    header {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 12px 0 40px;
-    }
-    .logo {
-      font-family: var(--font-display);
-      font-weight: 800;
-      font-size: 28px;
-      letter-spacing: -0.5px;
-      color: var(--accent);
-    }
-    .logo span { color: var(--text); font-weight: 400; }
+      .app-container {
+        position: relative;
+        z-index: 1;
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 32px 24px 64px;
+      }
 
-    /* Theme toggle button */
-    .theme-toggle {
-      margin-left: auto;
-      width: 40px;
-      height: 40px;
-      border: 1px solid var(--border);
-      background: var(--bg-card);
-      border-radius: 50%;
-      font-size: 18px;
-      line-height: 1;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--text);
-      transition: all var(--transition);
-    }
-    .theme-toggle:hover {
-      border-color: var(--accent);
-      background: var(--bg-card-hover);
-      transform: scale(1.05);
-    }
+      /* Header */
+      header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 0 40px;
+      }
+      .logo {
+        font-family: var(--font-display);
+        font-weight: 800;
+        font-size: 28px;
+        letter-spacing: -0.5px;
+        color: var(--accent);
+      }
+      .logo span {
+        color: var(--text);
+        font-weight: 400;
+      }
 
-    /* Drop zone */
-    .drop-zone {
-      position: relative;
-      border: 2px dashed var(--border-light);
-      border-radius: var(--radius-xl);
-      padding: 56px 32px;
-      text-align: center;
-      transition: all var(--transition);
-      cursor: pointer;
-      background: var(--bg);
-      overflow: hidden;
-    }
-    .drop-zone::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(135deg, var(--accent-glow), transparent 50%);
-      opacity: 0;
-      transition: opacity var(--transition);
-    }
-    .drop-zone:hover, .drop-zone.drag-over {
-      border-color: var(--accent);
-      background: var(--bg-card);
-      transform: scale(1.01);
-    }
-    .drop-zone:hover::before, .drop-zone.drag-over::before {
-      opacity: 1;
-    }
-    .drop-zone.drag-over {
-      border-style: solid;
-      box-shadow: 0 0 30px var(--accent-glow);
-    }
-    .drop-icon {
-      width: 64px; height: 64px;
-      margin: 0 auto 16px;
-      opacity: 0.5;
-      transition: opacity var(--transition);
-    }
-    .drop-zone:hover .drop-icon { opacity: 1; }
-    .drop-title {
-      font-family: var(--font-display);
-      font-size: 20px;
-      font-weight: 600;
-      margin-bottom: 8px;
-      max-width: 100%;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .drop-subtitle {
-      font-size: 14px;
-      color: var(--text-secondary);
-    }
-    .drop-zone input { display: none; }
-    .drop-subtitle em {
-      color: var(--accent);
-      font-style: normal;
-      font-weight: 500;
-    }
+      /* Theme toggle button */
+      .theme-toggle {
+        margin-left: auto;
+        width: 40px;
+        height: 40px;
+        border: 1px solid var(--border);
+        background: var(--bg-card);
+        border-radius: 50%;
+        font-size: 18px;
+        line-height: 1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text);
+        transition: all var(--transition);
+      }
+      .theme-toggle:hover {
+        border-color: var(--accent);
+        background: var(--bg-card-hover);
+        transform: scale(1.05);
+      }
 
-    /* Settings panel */
-    .settings-panel {
-      display: grid;
-      grid-template-columns: repeat(12, minmax(0, 1fr));
-      gap: 16px;
-      margin-top: 24px;
-      align-items: start;
-    }
-    .setting-group {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 20px;
-      min-width: 0;
-    }
-    .setting-label {
-      font-family: var(--font-display);
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-muted);
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      margin-bottom: 12px;
-    }
+      /* Drop zone */
+      .drop-zone {
+        position: relative;
+        border: 2px dashed var(--border-light);
+        border-radius: var(--radius-xl);
+        padding: 56px 32px;
+        text-align: center;
+        transition: all var(--transition);
+        cursor: pointer;
+        background: var(--bg);
+        overflow: hidden;
+      }
+      .drop-zone::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          135deg,
+          var(--accent-glow),
+          transparent 50%
+        );
+        opacity: 0;
+        transition: opacity var(--transition);
+      }
+      .drop-zone:hover,
+      .drop-zone.drag-over {
+        border-color: var(--accent);
+        background: var(--bg-card);
+        transform: scale(1.01);
+      }
+      .drop-zone:hover::before,
+      .drop-zone.drag-over::before {
+        opacity: 1;
+      }
+      .drop-zone.drag-over {
+        border-style: solid;
+        box-shadow: 0 0 30px var(--accent-glow);
+      }
+      .drop-icon {
+        width: 64px;
+        height: 64px;
+        margin: 0 auto 16px;
+        opacity: 0.5;
+        transition: opacity var(--transition);
+      }
+      .drop-zone:hover .drop-icon {
+        opacity: 1;
+      }
+      .drop-title {
+        font-family: var(--font-display);
+        font-size: 20px;
+        font-weight: 600;
+        margin-bottom: 8px;
+        max-width: 100%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .drop-subtitle {
+        font-size: 14px;
+        color: var(--text-secondary);
+      }
+      .drop-zone input {
+        display: none;
+      }
+      .drop-subtitle em {
+        color: var(--accent);
+        font-style: normal;
+        font-weight: 500;
+      }
 
-    /* Smart mode toggle */
-    .smart-toggle {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      cursor: pointer;
-      user-select: none;
-    }
-    .smart-toggle input { display: none; }
-    .smart-toggle-box {
-      flex-shrink: 0;
-      width: 20px;
-      height: 20px;
-      border: 2px solid var(--border-light);
-      border-radius: 6px;
-      margin-top: 2px;
-      position: relative;
-      transition: all 0.2s;
-    }
-    .smart-toggle input:checked + .smart-toggle-box {
-      background: var(--accent);
-      border-color: var(--accent);
-    }
-    .smart-toggle input:checked + .smart-toggle-box::after {
-      content: '✓';
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #fff;
-      font-size: 12px;
-      font-weight: bold;
-    }
-    .smart-toggle-text { display: flex; flex-direction: column; line-height: 1.3; }
-    .smart-toggle-text strong { font-size: 14px; color: var(--text); }
-    .smart-toggle-text small { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-    .smart-options { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
-    .metric-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-    .metric-label {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-muted);
-      letter-spacing: 0.5px;
-      white-space: nowrap;
-    }
-    .metric-select {
-      appearance: none;
-      -webkit-appearance: none;
-      min-width: 128px;
-      background-color: var(--bg-elevated);
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 9px center;
-      border: 1px solid var(--border-light);
-      border-radius: var(--radius-sm);
-      color: var(--text);
-      padding: 7px 28px 7px 10px;
-      font-size: 13px;
-      font-family: inherit;
-      line-height: 1.2;
-      cursor: pointer;
-      transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
-    }
-    .metric-select:hover { border-color: var(--text-muted); }
-    .metric-select:focus {
-      outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(232, 168, 50, 0.18);
-    }
+      /* Settings panel */
+      .settings-panel {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 24px;
+        align-items: stretch;
+      }
+      .setting-group {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        min-width: 0;
+      }
+      .setting-label {
+        font-family: var(--font-display);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted);
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        margin-bottom: 12px;
+      }
 
-    /* Disabled overlay when smart mode active */
-    .disabled-overlay { opacity: 0.4; pointer-events: none; filter: grayscale(0.5); }
-    .dimmed { opacity: 0.4; pointer-events: none; }
-    .smart-note {
-      margin-top: 10px;
-      padding: 7px 12px;
-      background: var(--accent-glow);
-      border-left: 2px solid var(--accent);
-      border-radius: 4px;
-      font-size: 11.5px;
-      line-height: 1.5;
-      color: var(--accent);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-    .smart-note-reason { min-width: 0; }
-    .smart-note-meta {
-      color: var(--text-muted);
-      white-space: nowrap;
-      flex-shrink: 0;
-      font-variant-numeric: tabular-nums;
-    }
-    .lossless-note {
-      margin-top: 8px;
-      padding: 6px 12px;
-      background: rgba(245, 158, 11, 0.12);
-      border-left: 2px solid #f59e0b;
-      border-radius: 4px;
-      font-size: 11.5px;
-      line-height: 1.5;
-      color: #f59e0b;
-    }
-    .maxsize-group { margin-top: 14px; }
-    .encode-divider { height: 1px; background: var(--border); margin: 16px 0; }
-    .encode-group .smart-toggle + .smart-toggle { margin-top: 12px; }
-    .row-disabled { opacity: 0.4; pointer-events: none; }
-    .mutex-note {
-      margin-bottom: 14px;
-      padding: 6px 12px;
-      background: var(--accent-glow);
-      border-left: 2px solid var(--accent);
-      border-radius: 4px;
-      font-size: 11.5px;
-      line-height: 1.5;
-      color: var(--accent);
-    }
-    .setting-label { display: block; margin-bottom: 6px; }
-    .setting-label strong { font-size: 13px; color: var(--text); }
-    .setting-label small { display: block; margin-top: 3px; font-size: 11px; color: var(--text-muted); line-height: 1.5; }
-    .text-input {
-      width: 100%;
-      box-sizing: border-box;
-      padding: 8px 10px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      color: var(--text);
-      font-size: 13px;
-    }
-    .text-input:focus { outline: none; border-color: var(--accent); }
-    .text-input:disabled { opacity: 0.4; cursor: not-allowed; }
-    .rotate-block { margin-top: 14px; }
-    .metric-desc {
-      margin-top: 12px;
-      padding: 5px 0 5px 10px;
-      border-left: 2px solid var(--accent);
-      border-radius: 2px;
-      font-size: 12px;
-      line-height: 1.5;
-      color: var(--text-muted);
-    }
+      /* Smart mode toggle */
+      .smart-toggle {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        cursor: pointer;
+        user-select: none;
+      }
+      .smart-toggle input {
+        display: none;
+      }
+      .smart-toggle-box {
+        flex-shrink: 0;
+        width: 20px;
+        height: 20px;
+        border: 2px solid var(--border-light);
+        border-radius: 6px;
+        margin-top: 2px;
+        position: relative;
+        transition: all 0.2s;
+      }
+      .smart-toggle input:checked + .smart-toggle-box {
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      .smart-toggle input:checked + .smart-toggle-box::after {
+        content: "✓";
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 12px;
+        font-weight: bold;
+      }
+      .smart-toggle-text {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.3;
+      }
+      .smart-toggle-text strong {
+        font-size: 14px;
+        color: var(--text);
+      }
+      .smart-toggle-text small {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 2px;
+      }
+      .smart-options {
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid var(--border);
+      }
+      .smart-intro {
+        margin-top: 12px;
+        font-size: 12px;
+        color: var(--text-muted);
+        line-height: 1.6;
+      }
+      .metric-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .metric-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted);
+        letter-spacing: 0.5px;
+        white-space: nowrap;
+      }
+      .metric-select {
+        appearance: none;
+        -webkit-appearance: none;
+        min-width: 128px;
+        background-color: var(--bg-elevated);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 9px center;
+        border: 1px solid var(--border-light);
+        border-radius: var(--radius-sm);
+        color: var(--text);
+        padding: 7px 28px 7px 10px;
+        font-size: 13px;
+        font-family: inherit;
+        line-height: 1.2;
+        cursor: pointer;
+        transition:
+          border-color 0.15s,
+          box-shadow 0.15s,
+          background-color 0.15s;
+      }
+      .metric-select:hover {
+        border-color: var(--text-muted);
+      }
+      .metric-select:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(232, 168, 50, 0.18);
+      }
 
-    /* Single-image analysis (now rendered below the drop zone, styled via .analysis-below) */
-    .drop-default { display: block; }
-    .drop-analysis {
-      display: flex;
-      gap: 20px;
-      align-items: center;
-      text-align: left;
-      animation: fade-in 0.3s ease-out both;
-    }
-    .drop-thumb {
-      width: 96px; height: 96px;
-      border-radius: var(--radius);
-      overflow: hidden;
-      background: var(--bg-elevated);
-      flex-shrink: 0;
-    }
-    .drop-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .drop-info { flex: 1; min-width: 0; }
-    .drop-info-head {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-    .analysis-fmt {
-      font-family: var(--font-display);
-      font-weight: 700;
-      font-size: 16px;
-      color: var(--text);
-    }
-    .analysis-level {
-      font-size: 12px;
-      font-weight: 600;
-      padding: 4px 10px;
-      border-radius: 20px;
-      letter-spacing: 0.3px;
-      white-space: nowrap;
-    }
-    .analysis-level.aggressive { color: var(--error); background: var(--error-glow); }
-    .analysis-level.moderate   { color: var(--warning); background: var(--accent-glow); }
-    .analysis-level.ok         { color: var(--success); background: var(--success-glow); }
-    .analysis-level.high       { color: var(--success); background: var(--success-glow); }
-    .analysis-level.lossless   { color: var(--accent); background: var(--accent-glow); }
-    .analysis-level.unknown    { color: var(--text-muted); background: var(--bg-elevated); }
-    .drop-info-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 14px 22px;
-      margin-bottom: 0;
-    }
-    /* 左：指标网格 / 右：说明、建议与操作按钮，填满右侧空白 */
-    .da-body {
-      display: grid;
-      grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-      gap: 18px 28px;
-      align-items: start;
-    }
-    .da-side {
-      display: flex; flex-direction: column; align-items: flex-start;
-      gap: 6px; min-width: 0;
-    }
-    .da-side .analysis-rec { margin-top: 0; }
-    .da-side .btn-sm.primary { margin-top: 6px; }
-    @media (max-width: 760px) {
-      .da-body { grid-template-columns: 1fr; }
-    }
-    .drop-info-grid .k {
-      display: block;
-      font-size: 11px;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 3px;
-    }
-    .drop-info-grid .v {
-      font-family: var(--font-display);
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--text);
-      font-variant-numeric: tabular-nums;
-    }
-    .analysis-note {
-      font-size: 12.5px;
-      color: var(--text-secondary);
-      line-height: 1.5;
-    }
-    .analysis-rec {
-      margin-top: 6px;
-      font-size: 12.5px;
-      line-height: 1.5;
-      color: var(--text);
-    }
-    .analysis-rec strong { color: var(--accent); font-weight: 600; }
-    .drop-analysis .btn-sm.primary { margin-top: 12px; }
+      /* Disabled overlay when smart mode active */
+      .disabled-overlay {
+        opacity: 0.4;
+        pointer-events: none;
+        filter: grayscale(0.5);
+      }
+      .dimmed {
+        opacity: 0.4;
+        pointer-events: none;
+      }
+      .smart-note {
+        margin-top: 10px;
+        padding: 7px 12px;
+        background: var(--accent-glow);
+        border-left: 2px solid var(--accent);
+        border-radius: 4px;
+        font-size: 11.5px;
+        line-height: 1.5;
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .smart-note-reason {
+        min-width: 0;
+      }
+      /* Mutually-exclusive note: floats 20px to the right of the 编码选项 label,
+         absolute-positioned so it never adds height / causes layout jump. */
+      .setting-header {
+        position: relative;
+        display: flex;
+        align-items: center;
+      }
+      .setting-label-inline {
+        display: inline-block;
+        position: relative;
+        margin-bottom: 0;
+      }
+      .mutex-note {
+        position: absolute;
+        top: 50%;
+        left: calc(100% + 20px);
+        transform: translateY(-50%);
+        z-index: 2;
+        padding: 7px 12px;
+        background: var(--accent-glow);
+        border-left: 2px solid var(--accent);
+        border-radius: 4px;
+        font-size: 11.5px;
+        line-height: 1.45;
+        color: var(--accent);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+        white-space: nowrap;
+      }
+      .smart-note-meta {
+        color: var(--text-muted);
+        white-space: nowrap;
+        flex-shrink: 0;
+        font-variant-numeric: tabular-nums;
+      }
+      .lossless-note {
+        margin-top: 8px;
+        padding: 6px 12px;
+        background: rgba(245, 158, 11, 0.12);
+        border-left: 2px solid #f59e0b;
+        border-radius: 4px;
+        font-size: 11.5px;
+        line-height: 1.5;
+        color: #f59e0b;
+      }
+      .maxsize-group {
+        margin-top: 14px;
+      }
+      .encode-divider {
+        height: 1px;
+        background: var(--border);
+        margin: 16px 0;
+      }
+      .encode-group .smart-toggle + .smart-toggle {
+        margin-top: 12px;
+      }
+      .row-disabled {
+        opacity: 0.4;
+        pointer-events: none;
+      }
+      .mutex-note {
+        margin-bottom: 14px;
+        padding: 6px 12px;
+        background: var(--accent-glow);
+        border-left: 2px solid var(--accent);
+        border-radius: 4px;
+        font-size: 11.5px;
+        line-height: 1.5;
+        color: var(--accent);
+      }
+      .setting-label {
+        display: block;
+        margin-bottom: 6px;
+      }
+      .setting-label strong {
+        font-size: 13px;
+        color: var(--text);
+      }
+      .setting-label small {
+        display: block;
+        margin-top: 3px;
+        font-size: 11px;
+        color: var(--text-muted);
+        line-height: 1.5;
+      }
+      .text-input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px 10px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        font-size: 13px;
+      }
+      .text-input:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+      .text-input:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .rotate-block {
+        margin-top: 14px;
+      }
+      .metric-desc {
+        margin-top: 12px;
+        padding: 5px 0 5px 10px;
+        border-left: 2px solid var(--accent);
+        border-radius: 2px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--text-muted);
+      }
 
-    /* Uploaded files / analysis panel (rendered below the drop zone) */
-    .da-single { position: relative; display: flex; gap: 20px; align-items: flex-start; }
-    .da-name {
-      font-size: 14px; font-weight: 500; color: var(--text-primary);
-      margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .da-del {
-      flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px;
-      border: 1px solid var(--border-light); background: transparent;
-      color: var(--text-secondary); cursor: pointer; font-size: 18px; line-height: 1;
-      display: flex; align-items: center; justify-content: center;
-      transition: color var(--transition), border-color var(--transition), background var(--transition);
-    }
-    .da-del:hover { color: #ff5b5b; border-color: #ff5b5b; background: rgba(255,91,91,0.10); }
-    .da-files { display: flex; flex-direction: column; gap: 10px; }
-    .file-item {
-      display: flex; align-items: center; gap: 14px;
-      padding: 10px 12px; background: var(--bg-elevated);
-      border: 1px solid var(--border-light); border-radius: var(--radius);
-      transition: border-color var(--transition), background var(--transition);
-    }
-    .file-item:hover { border-color: var(--accent); background: var(--bg-card-hover); }
-    .fi-thumb {
-      width: 44px; height: 44px; border-radius: 8px; overflow: hidden;
-      flex-shrink: 0; background: var(--bg-card);
-    }
-    .fi-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .fi-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-    .fi-name {
-      font-size: 14px; font-weight: 500; color: var(--text-primary);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .fi-size { font-size: 12px; color: var(--text-secondary); }
-    .fi-del {
-      flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px;
-      border: 1px solid var(--border-light); background: transparent;
-      color: var(--text-secondary); cursor: pointer; font-size: 18px; line-height: 1;
-      display: flex; align-items: center; justify-content: center;
-      transition: color var(--transition), border-color var(--transition), background var(--transition);
-    }
-    .fi-del:hover { color: #ff5b5b; border-color: #ff5b5b; background: rgba(255,91,91,0.10); }
-
-    /* Single-image analysis card shown below the drop zone */
-    .analysis-below {
-      display: block; /* 覆盖 .drop-analysis 的 flex 行布局，使子块竖向堆叠并占满宽度 */
-      margin-top: 16px; padding: 22px 26px; text-align: left;
-      background: var(--bg-card); border: 1px solid var(--border-light);
-      border-radius: var(--radius); animation: fade-in 0.3s ease-out both;
-    }
-
-    /* Persistent quality tip */
-    .quality-tip {
-      margin-top: 12px;
-      font-size: 11.5px;
-      line-height: 1.5;
-      color: var(--text-muted);
-    }
-    .quality-tip strong { color: var(--text-secondary); font-weight: 600; }
-
-    /* Format selector */
-    #formatGroup { grid-column: span 7; }
-    .quality-group { grid-column: span 5; }
-    .encode-group { grid-column: span 7; }
-    .smart-group { grid-column: span 5; }
-    .format-options {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 8px;
-    }
-    .format-btn {
-      background: var(--bg-elevated);
-      border: 2px solid var(--border);
-      border-radius: var(--radius);
-      padding: 14px 10px 12px;
-      text-align: center;
-      cursor: pointer;
-      transition: all var(--transition);
-      font-family: var(--font-display);
-      position: relative;
-    }
-    .format-btn:hover {
-      border-color: var(--accent-dim);
-      background: var(--bg-card-hover);
-    }
-    .format-btn.active {
-      border-color: var(--accent);
-      background: var(--accent-glow);
-      box-shadow: 0 0 12px var(--accent-glow);
-    }
-    .format-check {
-      position: absolute;
-      top: -7px; right: -7px;
-      width: 18px; height: 18px;
-      border-radius: 50%;
-      background: var(--accent);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 10px;
-      color: #0a0a0c;
-      font-weight: 700;
-      box-shadow: 0 0 0 2px var(--bg-card);
-      z-index: 2;
-      opacity: 0;
-      transform: scale(0.5);
-      transition: all var(--transition);
-    }
-    .format-btn.active .format-check {
-      opacity: 1;
-      transform: scale(1);
-    }
-    .format-name {
-      font-weight: 700;
-      font-size: 14px;
-      color: var(--text);
-    }
-    .format-desc {
-      font-size: 11px;
-      color: var(--text-muted);
-      margin-top: 4px;
-    }
-    .format-btn.active .format-name { color: var(--accent); }
-    
-    .format-count {
-      font-size: 11px;
-      color: var(--accent);
-      margin-top: 6px;
-      font-weight: 500;
-      opacity: 0;
-      transition: opacity var(--transition);
-      height: 0;
-      overflow: hidden;
-    }
-    .format-count.visible {
-      opacity: 1;
-      height: auto;
-    }
-
-    /* Quality slider */
-    .quality-display {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 12px;
-    }
-    .quality-value {
-      font-family: var(--font-display);
-      font-size: 32px;
-      font-weight: 700;
-      color: var(--accent);
-    }
-    .quality-hint {
-      font-size: 12px;
-      color: var(--text-secondary);
-      max-width: 140px;
-      text-align: right;
-    }
-    .slider-track {
-      position: relative;
-      height: 8px;
-      background: var(--bg-elevated);
-      border-radius: 4px;
-      overflow: hidden;
-    }
-    .slider-fill {
-      position: absolute;
-      left: 0; top: 0; bottom: 0;
-      background: linear-gradient(90deg, var(--accent-dim), var(--accent));
-      border-radius: 4px;
-      transition: width 0.15s ease;
-    }
-    input[type="range"] {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 100%;
-      height: 8px;
-      background: transparent;
-      position: absolute;
-      top: 0;
-      margin: 0;
-      cursor: pointer;
-      z-index: 2;
-    }
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 20px; height: 20px;
-      border-radius: 50%;
-      background: var(--accent);
-      border: 3px solid var(--bg-card);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-      cursor: grab;
-    }
-    input[type="range"]::-moz-range-thumb {
-      width: 20px; height: 20px;
-      border-radius: 50%;
-      background: var(--accent);
-      border: 3px solid var(--bg-card);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-      cursor: grab;
-    }
-    .slider-container {
-      position: relative;
-      margin-top: 4px;
-    }
-
-    /* Process button */
-    .process-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      width: 100%;
-      padding: 14px 24px;
-      margin-top: 24px;
-      background: linear-gradient(135deg, var(--accent-dim), var(--accent));
-      border: none;
-      border-radius: var(--radius-lg);
-      color: #0a0a0c;
-      font-family: var(--font-display);
-      font-size: 16px;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-      cursor: pointer;
-      transition: all var(--transition);
-      box-shadow: 0 4px 16px var(--accent-glow);
-    }
-    .process-btn:hover:not(:disabled) {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 24px rgba(232,168,50,0.3);
-    }
-    .process-btn:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-      transform: none;
-    }
-    .process-btn.processing {
-      animation: pulse-btn 1.5s ease-in-out infinite;
-    }
-    @keyframes pulse-btn {
-      0%, 100% { box-shadow: 0 4px 16px var(--accent-glow); }
-      50% { box-shadow: 0 4px 32px rgba(232,168,50,0.4); }
-    }
-
-    /* Progress */
-    .progress-bar {
-      height: 4px;
-      background: var(--bg-elevated);
-      border-radius: 2px;
-      margin-top: 16px;
-      overflow: hidden;
-      opacity: 0;
-      transition: opacity var(--transition);
-    }
-    .progress-bar.visible { opacity: 1; }
-    .progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--accent), var(--success));
-      border-radius: 2px;
-      width: 0;
-      transition: width 0.3s ease;
-    }
-
-    /* Results area */
-    .results-area {
-      margin-top: 32px;
-    }
-    .results-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 16px;
-    }
-    .results-title {
-      font-family: var(--font-display);
-      font-size: 18px;
-      font-weight: 600;
-    }
-
-    /* Stats summary */
-    .stats-summary {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      margin-bottom: 20px;
-    }
-    .stat-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 16px 18px;
-      min-height: 96px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      text-align: center;
-    }
-    .stat-card.accent {
-      border-color: var(--accent-dim);
-      background: linear-gradient(135deg, var(--bg-card), var(--accent-glow));
-    }
-    .stat-card.success {
-      border-color: rgba(50,216,120,0.3);
-      background: linear-gradient(135deg, var(--bg-card), var(--success-glow));
-    }
-    .stat-card.warn {
-      border-color: rgba(232,72,72,0.3);
-      background: linear-gradient(135deg, var(--bg-card), var(--error-glow));
-    }
-    .stat-label {
-      font-size: 11px;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-bottom: 6px;
-    }
-    .stat-value {
-      font-family: var(--font-display);
-      font-size: 24px;
-      font-weight: 700;
-      line-height: 1.15;
-      color: var(--text);
-      font-variant-numeric: tabular-nums;
-    }
-    .stat-sub {
-      margin-top: 4px;
-      font-size: 11px;
-      line-height: 1.4;
-      color: var(--text-muted);
-      font-variant-numeric: tabular-nums;
-    }
-    .stat-card.accent .stat-value { color: var(--accent); }
-    .stat-card.success .stat-value { color: var(--success); }
-    .stat-card.warn .stat-value { color: var(--error); }
-
-    /* Result cards */
-    .result-cards {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 12px;
-    }
-    .result-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 16px 18px;
-      display: flex;
-      gap: 16px;
-      align-items: flex-start;
-      transition: all var(--transition);
-      animation: fade-in 0.4s ease-out both;
-    }
-    @keyframes fade-in {
-      from { opacity: 0; transform: translateY(12px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .result-card:hover {
-      border-color: var(--border-light);
-      background: var(--bg-card-hover);
-    }
-    .result-preview {
-      width: 80px;
-      height: 80px;
-      border-radius: var(--radius-sm);
-      overflow: hidden;
-      background: var(--bg-elevated);
-      flex-shrink: 0;
-      position: relative;
-    }
-    .result-preview img {
-      width: 100%; height: 100%;
-      object-fit: cover;
-    }
-    .result-info {
-      flex: 1 1 auto;
-      min-width: 0;
-    }
-    .result-name {
-      font-family: var(--font-display);
-      font-size: 14px;
-      font-weight: 600;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .result-meta {
-      font-size: 12px;
-      color: var(--text-secondary);
-      margin-top: 4px;
-    }
-    /* 格式结果放在右侧独立列，填充卡片横向空间 */
-    .result-badges {
-      flex: 0 0 auto;
-      width: 46%;
-      max-width: 560px;
-      align-self: flex-start;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-      gap: 6px;
-    }
-    .fmt-chip {
-      display: block;
-      width: 100%;
-      padding: 6px 9px;
-      background: var(--bg-elevated);
-      border: 1px solid var(--border-light);
-      border-radius: var(--radius-sm);
-      font-family: var(--font-body);
-      text-align: left;
-      cursor: pointer;
-      transition: all var(--transition);
-    }
-    .fmt-chip:hover {
-      border-color: var(--accent);
-      background: var(--bg-card-hover);
-    }
-    .fmt-chip-top {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 6px;
-    }
-    .fmt-chip .fmt-name {
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.3px;
-      color: var(--accent);
-    }
-    .fmt-chip .fmt-save {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--success);
-      font-variant-numeric: tabular-nums;
-    }
-    .fmt-chip .fmt-save.grow { color: var(--error); }
-    .fmt-chip .fmt-save.keep { color: var(--text-muted); font-weight: 500; }
-    .fmt-chip .fmt-size {
-      display: block;
-      margin-top: 2px;
-      font-size: 10px;
-      color: var(--text-muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      font-variant-numeric: tabular-nums;
-    }
-    .btn-sm {
-      padding: 8px 14px;
-      background: var(--bg-elevated);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      color: var(--text-secondary);
-      font-size: 12px;
-      font-family: var(--font-body);
-      cursor: pointer;
-      transition: all var(--transition);
-    }
-    .btn-sm:hover {
-      background: var(--bg-card-hover);
-      color: var(--text);
-      border-color: var(--border-light);
-    }
-    .btn-sm.primary {
-      background: var(--accent-glow);
-      border-color: var(--accent-dim);
-      color: var(--accent);
-    }
-    .btn-sm.primary:hover {
-      background: rgba(232,168,50,0.25);
-      color: var(--accent);
-    }
-    .result-card.error {
-      border-color: rgba(232,72,72,0.3);
-      background: linear-gradient(135deg, var(--bg-card), var(--error-glow));
-    }
-    .result-error-msg {
-      color: var(--error);
-      font-size: 13px;
-    }
-
-    /* Download all button */
-    .download-all-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 20px;
-      background: var(--bg-card);
-      border: 1px solid var(--success);
-      border-radius: var(--radius);
-      color: var(--success);
-      font-family: var(--font-display);
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all var(--transition);
-    }
-    .download-all-btn:hover:not(:disabled) {
-      background: var(--success-glow);
-      transform: translateY(-1px);
-    }
-    .download-all-btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-      transform: none;
-    }
-    .download-all-btn .spinner {
-      width: 14px;
-      height: 14px;
-    }
-
-    /* Empty state */
-    .empty-state {
-      text-align: center;
-      padding: 40px;
-      color: var(--text-muted);
-    }
-    .empty-icon {
-      font-size: 48px;
-      margin-bottom: 12px;
-      opacity: 0.3;
-    }
-
-    /* Toast notification */
-    .toast {
-      position: fixed;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%) translateY(100px);
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 12px 24px;
-      font-size: 14px;
-      box-shadow: var(--shadow-lg);
-      z-index: 1000;
-      transition: transform 0.3s ease;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .toast.visible { transform: translateX(-50%) translateY(0); }
-    .toast.success { border-color: var(--success); color: var(--success); }
-    .toast.error { border-color: var(--error); color: var(--error); }
-
-    /* Responsive */
-    @media (max-width: 1100px) {
-      .result-cards { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); }
-    }
-    @media (max-width: 900px) {
-      #formatGroup, .quality-group, .encode-group, .smart-group { grid-column: span 12; }
-    }
-    @media (max-width: 640px) {
-      .app-container { padding: 16px 16px 48px; }
-      .format-options { grid-template-columns: repeat(2, 1fr); }
-      .stats-summary { grid-template-columns: 1fr; }
-      .result-cards { grid-template-columns: 1fr; }
-      .result-card { flex-wrap: wrap; padding: 14px; gap: 12px; }
-      .result-preview { width: 60px; height: 60px; }
-      .result-badges { width: 100%; max-width: none; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
-      .stat-value { font-size: 20px; }
-    }
-
-    /* Spinner */
-    .spinner {
-      display: inline-block;
-      width: 18px; height: 18px;
-      border: 2px solid transparent;
-      border-top-color: currentColor;
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* Image comparison overlay */
-    .comparison-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.85);
-      z-index: 100;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 40px;
-    }
-    .comparison-overlay.visible { display: flex; }
-    .comparison-container {
-      max-width: 90vw;
-      max-height: 80vh;
-      position: relative;
-    }
-    .comparison-container img {
-      max-width: 90vw;
-      max-height: 80vh;
-      object-fit: contain;
-      display: block;
-    }
-    .comparison-close {
-      position: absolute;
-      top: -40px; right: 0;
-      background: none;
-      border: none;
-      color: var(--text-secondary);
-      font-size: 28px;
-      cursor: pointer;
-      padding: 8px;
-    }
-    .comparison-close:hover { color: var(--text); }
-  </style>
-</head>
-<body>
-  <div class="noise-overlay"></div>
-  <div class="app-container">
-    <header>
-      <div class="logo">imgmin<span>.studio</span></div>
-      <button class="theme-toggle" id="themeToggle" title="切换明暗主题" aria-label="切换主题">🌙</button>
-    </header>
-
-    <!-- Drop zone -->
-    <div class="drop-zone" id="dropZone">
-      <div class="drop-default">
-        <svg class="drop-icon" viewBox="0 0 64 64" fill="none">
-          <rect x="8" y="12" width="48" height="40" rx="4" stroke="currentColor" stroke-width="2"/>
-          <circle cx="24" cy="30" r="6" stroke="currentColor" stroke-width="2"/>
-          <path d="M8 42L22 32L34 40L48 28L56 36" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          <path d="M32 4V20M24 12L32 4L40 12" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <div class="drop-title">拖入图片到此处</div>
-        <div class="drop-subtitle">
-          或 <em class="pick-files">选择文件</em> · <em class="pick-folder">选择文件夹</em>
-          <br>支持 JPG、PNG、GIF、WebP、AVIF、BMP、TIFF（HEIC 等暂不支持）
-        </div>
-      </div>
-
-      <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.webp,.avif,.gif,.bmp,.tif,.tiff" multiple>
-      <input type="file" id="folderInput" webkitdirectory hidden>
-    </div>
-
-    <!-- Uploaded files / analysis panel (shown below the drop zone, never replaces it) -->
-    <div class="drop-analysis analysis-below" id="dropAnalysis" style="display:none">
-      <!-- 单张图片：分析详情 + 文件名 + 删除 -->
-      <div class="da-single" id="daSingle" style="display:none">
-        <div class="drop-thumb"><img id="dropThumb" alt="预览"></div>
-        <div class="drop-info">
-          <div class="drop-info-head">
-            <span class="analysis-fmt" id="anFmt">—</span>
-            <span class="analysis-level" id="anLevel">—</span>
-          </div>
-          <div class="da-name" id="daName"></div>
-          <div class="da-body">
-            <div class="drop-info-grid">
-              <div><span class="k">尺寸</span><span class="v" id="anDims">—</span></div>
-              <div><span class="k">大小</span><span class="v" id="anSize">—</span></div>
-              <div><span class="k">每像素比特</span><span class="v" id="anBpp">—</span></div>
-              <div><span class="k">色彩空间</span><span class="v" id="anSpace">—</span></div>
-              <div><span class="k">通道</span><span class="v" id="anChannels">—</span></div>
-              <div><span class="k">位深</span><span class="v" id="anDepth">—</span></div>
-              <div><span class="k">分辨率</span><span class="v" id="anDensity">—</span></div>
-              <div><span class="k">透明</span><span class="v" id="anAlpha">—</span></div>
-              <div><span class="k">方向</span><span class="v" id="anOrient">—</span></div>
-            </div>
-            <div class="da-side">
-              <div class="analysis-note" id="anNote"></div>
-              <div class="analysis-rec" id="anRec"></div>
-              <button class="btn-sm primary" id="anApply" style="display:none" type="button">应用建议质量</button>
-            </div>
-          </div>
-        </div>
-        <button class="fi-del da-del" id="daDelSingle" type="button" title="移除" aria-label="移除">×</button>
-      </div>
-      <!-- 多张图片：文件行列表 -->
-      <div class="da-files" id="daFiles"></div>
-    </div>
-
-    <!-- Settings -->
-    <div class="settings-panel">
-      <div class="setting-group" id="formatGroup">
-        <div class="setting-label">格式</div>
-        <div class="format-options">
-          <div class="format-btn" data-format="webp">
-            <div class="format-check">✓</div>
-            <div class="format-name">WebP</div>
-            <div class="format-desc">最优比例</div>
-          </div>
-          <div class="format-btn" data-format="avif">
-            <div class="format-check">✓</div>
-            <div class="format-name">AVIF</div>
-            <div class="format-desc">体积最小</div>
-          </div>
-          <div class="format-btn" data-format="jpeg">
-            <div class="format-check">✓</div>
-            <div class="format-name">JPEG</div>
-            <div class="format-desc">通用兼容</div>
-          </div>
-          <div class="format-btn" data-format="png">
-            <div class="format-check">✓</div>
-            <div class="format-name">PNG</div>
-            <div class="format-desc">无损</div>
-          </div>
-          <div class="format-btn active" data-format="original">
-            <div class="format-check">✓</div>
-            <div class="format-name">原格式</div>
-            <div class="format-desc">保留原格式</div>
-          </div>
-        </div>
-        <div class="format-count" id="formatCount">已选 1 种格式</div>
-      </div>
-      <div class="setting-group quality-group">
-        <div class="setting-label">质量</div>
-        <div class="quality-display">
-          <div class="quality-value" id="qualityValue">80</div>
-          <div class="quality-hint" id="qualityHint">WebP 均衡质量</div>
-        </div>
-        <div class="slider-container">
-          <div class="slider-track">
-            <div class="slider-fill" id="sliderFill" style="width:80%"></div>
-          </div>
-          <input type="range" id="qualitySlider" min="1" max="100" value="80">
-        </div>
-        <div class="quality-tip">
-          <strong>提示：</strong>质量越高文件越大；已被压到极限的图用高值重编码可能反而变大（同格式变大时自动保留原图）。
-        </div>
-      </div>
-
-      <div class="setting-group encode-group">
-        <div class="setting-label">编码选项</div>
-        <div class="mutex-note" id="mutexNote" style="display:none">智能模式已接管「格式 + 质量」决策，无损模式与目标体积不可用。</div>
-        <label class="smart-toggle" id="losslessRow">
-          <input type="checkbox" id="losslessMode">
-          <span class="smart-toggle-box"></span>
-          <span class="smart-toggle-text">
-            <strong>无损模式</strong>
-            <small>WebP / AVIF / TIFF 原生无损（PNG 拉满压缩，JPEG 退回最高质量）</small>
-          </span>
-        </label>
-        <div class="metric-desc" id="losslessDesc">无损编码会忽略质量滑块，保留全部像素信息（体积通常更大）。</div>
-
-        <div class="encode-divider"></div>
-
-        <div class="maxsize-block" id="maxSizeBlock">
-          <label class="setting-label" for="maxSizeInput">
-            <strong>目标体积</strong>
-            <small>可选，如 200kb / 1.5mb；二分搜索最高质量使产物 ≤ 该体积（无损 / 智能模式下忽略）</small>
-          </label>
-          <input type="text" id="maxSizeInput" class="text-input" placeholder="例如 200kb" autocomplete="off">
-        </div>
-
-        <div class="encode-divider"></div>
-
-        <label class="smart-toggle">
-          <input type="checkbox" id="stripMeta">
-          <span class="smart-toggle-box"></span>
-          <span class="smart-toggle-text">
-            <strong>移除元数据</strong>
-            <small>该勾：发网页 / 社交 / 公开分享，想更小并隐藏 GPS、机型时。别勾：要留版权 / 拍摄参数 / HDR 色彩，或图靠方向标记摆正</small>
-          </span>
-        </label>
-        <label class="smart-toggle">
-          <input type="checkbox" id="rotateExif">
-          <span class="smart-toggle-box"></span>
-          <span class="smart-toggle-text">
-            <strong>按 EXIF 自动旋转</strong>
-            <small>该勾：手机竖拍图（方向标记摆正）或同时勾了「移除元数据」，避免转正后歪图。别勾：图已转正 / 方向不重要</small>
-          </span>
-        </label>
-
-
-      </div>
-
-      <div class="setting-group smart-group">
-        <label class="smart-toggle">
-          <input type="checkbox" id="smartMode">
-          <span class="smart-toggle-box"></span>
-          <span class="smart-toggle-text">
-            <strong>智能模式</strong>
-            <small>内容感知选格式 + 自适应质量（SSIM / Butteraugli）</small>
-          </span>
-        </label>
-        <div class="smart-options" id="smartOptions" style="display:none">
-          <div class="metric-row">
-            <label class="metric-label" for="metricSelect">质量指标</label>
-            <select id="metricSelect" class="metric-select">
-              <option value="ssim">SSIM（默认）</option>
-              <option value="butteraugli">Butteraugli</option>
-            </select>
-          </div>
-          <div class="metric-desc" id="metricDesc"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Process button -->
-    <button class="process-btn" id="processBtn" disabled>
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-        <path d="M10 2L2 10l8 8 8-8-8-8zM10 5l5 5-5 5-5-5 5-5z"/>
-      </svg>
-      压缩图片
-    </button>
-    <div class="progress-bar" id="progressBar">
-      <div class="progress-fill" id="progressFill"></div>
-    </div>
-
-    <!-- Results -->
-    <div class="results-area" id="resultsArea" style="display:none">
-      <div class="results-header">
-        <div class="results-title">处理结果</div>
-        <button class="download-all-btn" id="downloadAllBtn" style="display:none">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M8 12L3 7h3V1h4v6h3L8 12zM2 14h12v1H2z"/>
-          </svg>
-          下载全部
-        </button>
-      </div>
-      <div class="stats-summary" id="statsSummary"></div>
-      <div class="result-cards" id="resultCards"></div>
-    </div>
-  </div>
-
-  <!-- Toast -->
-  <div class="toast" id="toast"></div>
-
-  <script>
-    // State
-    const state = {
-      files: [],
-      formats: ['original'],
-      quality: 80,
-      smart: false,
-      metric: 'ssim',
-      lossless: false,
-      maxSize: '',
-      strip: false,
-      rotateExif: false,
-      processing: false,
-      zipping: false,
-      results: []
-    };
-
-    // DOM refs
-    const dropZone = document.getElementById('dropZone');
-    const fileInput = document.getElementById('fileInput');
-    const folderInput = document.getElementById('folderInput');
-    const processBtn = document.getElementById('processBtn');
-    const progressBar = document.getElementById('progressBar');
-    const progressFill = document.getElementById('progressFill');
-    const resultsArea = document.getElementById('resultsArea');
-    const resultCards = document.getElementById('resultCards');
-    const statsSummary = document.getElementById('statsSummary');
-    const downloadAllBtn = document.getElementById('downloadAllBtn');
-    const qualitySlider = document.getElementById('qualitySlider');
-    const qualityValue = document.getElementById('qualityValue');
-    const qualityHint = document.getElementById('qualityHint');
-    const sliderFill = document.getElementById('sliderFill');
-    const formatCount = document.getElementById('formatCount');
-    const toast = document.getElementById('toast');
-    const smartMode = document.getElementById('smartMode');
-    const smartOptions = document.getElementById('smartOptions');
-    const metricSelect = document.getElementById('metricSelect');
-    const metricDesc = document.getElementById('metricDesc');
-    const losslessMode = document.getElementById('losslessMode');
-    const losslessDesc = document.getElementById('losslessDesc');
-    const maxSizeInput = document.getElementById('maxSizeInput');
-    const stripMeta = document.getElementById('stripMeta');
-    const rotateExifToggle = document.getElementById('rotateExif');
-    const losslessRow = document.getElementById('losslessRow');
-    const maxSizeBlock = document.getElementById('maxSizeBlock');
-    const mutexNote = document.getElementById('mutexNote');
-    const METRIC_DESC = {};
-    METRIC_DESC.ssim='SSIM：结构相似性，通用均衡';
-    METRIC_DESC.butteraugli='Butteraugli：人眼感知差异，体积更小';
-    function updateMetricDesc() { metricDesc.textContent = METRIC_DESC[metricSelect.value] || ''; }
-    const formatGroup = document.getElementById('formatGroup');
-    const themeToggle = document.getElementById('themeToggle');
-    const dropAnalysis = document.getElementById('dropAnalysis');
-    const daSingle = document.getElementById('daSingle');
-    const daFiles = document.getElementById('daFiles');
-    const daName = document.getElementById('daName');
-    const daDelSingle = document.getElementById('daDelSingle');
-    daDelSingle.addEventListener('click', () => removeFile(0));
-    const dropThumb = document.getElementById('dropThumb');
-    const anFmt = document.getElementById('anFmt');
-    const anLevel = document.getElementById('anLevel');
-    const anDims = document.getElementById('anDims');
-    const anSize = document.getElementById('anSize');
-    const anBpp = document.getElementById('anBpp');
-    const anSpace = document.getElementById('anSpace');
-    const anChannels = document.getElementById('anChannels');
-    const anDepth = document.getElementById('anDepth');
-    const anDensity = document.getElementById('anDensity');
-    const anAlpha = document.getElementById('anAlpha');
-    const anOrient = document.getElementById('anOrient');
-    const anNote = document.getElementById('anNote');
-    const anRec = document.getElementById('anRec');
-    const anApply = document.getElementById('anApply');
-    let analysisSuggestedQuality = null;
-    let dropThumbUrl = null;
-
-    // 主题切换（黑 / 白）
-    function applyTheme(theme) {
-      document.documentElement.setAttribute('data-theme', theme);
-      try { localStorage.setItem('imgmin-theme', theme); } catch (e) {}
-      themeToggle.textContent = theme === 'light' ? '🌙' : '☀️';
-    }
-    (function initTheme() {
-      let saved = 'dark';
-      try { saved = localStorage.getItem('imgmin-theme') || 'dark'; } catch (e) {}
-      applyTheme(saved);
-    })();
-    themeToggle.addEventListener('click', () => {
-      const cur = document.documentElement.getAttribute('data-theme') || 'dark';
-      applyTheme(cur === 'light' ? 'dark' : 'light');
-    });
-
-    // Quality hints per format
-    const qualityHints = {
-      webp: { low: '最大压缩', mid: 'WebP 均衡质量', high: '近似无损 WebP' },
-      avif: { low: '极小文件', mid: 'AVIF 推荐区间（50-65）', high: 'AVIF >70 过高' },
-      jpeg: { low: '高压缩', mid: '良好 JPEG 质量', high: '高质量 JPEG' },
-      png: { low: '最小调色板', mid: '标准 PNG', high: '无损 PNG' },
-      original: { low: '高压缩', mid: '均衡质量', high: '近似无损' }
-    };
-
-    // Init format count
-    updateFormatCount();
-    updateQualityHint();
-
-    // Format selection (multi-select)
-    document.querySelectorAll('.format-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const fmt = btn.dataset.format;
-        const idx = state.formats.indexOf(fmt);
-        
-        if (idx > -1) {
-          // Deselect — but prevent deselecting the last one
-          if (state.formats.length > 1) {
-            state.formats.splice(idx, 1);
-            btn.classList.remove('active');
-          }
-        } else {
-          // Select
-          state.formats.push(fmt);
-          btn.classList.add('active');
+      /* Single-image analysis (now rendered below the drop zone, styled via .analysis-below) */
+      .drop-default {
+        display: block;
+      }
+      .drop-analysis {
+        display: flex;
+        gap: 20px;
+        align-items: center;
+        text-align: left;
+        animation: fade-in 0.3s ease-out both;
+      }
+      .drop-thumb {
+        width: 96px;
+        height: 96px;
+        border-radius: var(--radius);
+        overflow: hidden;
+        background: var(--bg-elevated);
+        flex-shrink: 0;
+      }
+      .drop-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .drop-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .drop-info-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .analysis-fmt {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 16px;
+        color: var(--text);
+      }
+      .analysis-level {
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 20px;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+      }
+      .analysis-level.aggressive {
+        color: var(--error);
+        background: var(--error-glow);
+      }
+      .analysis-level.moderate {
+        color: var(--warning);
+        background: var(--accent-glow);
+      }
+      .analysis-level.ok {
+        color: var(--success);
+        background: var(--success-glow);
+      }
+      .analysis-level.high {
+        color: var(--success);
+        background: var(--success-glow);
+      }
+      .analysis-level.lossless {
+        color: var(--accent);
+        background: var(--accent-glow);
+      }
+      .analysis-level.unknown {
+        color: var(--text-muted);
+        background: var(--bg-elevated);
+      }
+      .drop-info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 14px 22px;
+        margin-bottom: 0;
+      }
+      /* 左：指标网格 / 右：说明、建议与操作按钮，填满右侧空白 */
+      .da-body {
+        display: grid;
+        grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+        gap: 18px 28px;
+        align-items: start;
+      }
+      .da-side {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        min-width: 0;
+      }
+      .da-side .analysis-rec {
+        margin-top: 0;
+      }
+      .da-side .btn-sm.primary {
+        margin-top: 6px;
+      }
+      @media (max-width: 760px) {
+        .da-body {
+          grid-template-columns: 1fr;
         }
-        
-        updateFormatCount();
+      }
+      .drop-info-grid .k {
+        display: block;
+        font-size: 11px;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 3px;
+      }
+      .drop-info-grid .v {
+        font-family: var(--font-display);
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+      }
+      .analysis-note {
+        font-size: 12.5px;
+        color: var(--text-secondary);
+        line-height: 1.5;
+      }
+      .analysis-rec {
+        margin-top: 6px;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--text);
+      }
+      .analysis-rec strong {
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .drop-analysis .btn-sm.primary {
+        margin-top: 12px;
+      }
+
+      /* Uploaded files / analysis panel (rendered below the drop zone) */
+      .da-single {
+        position: relative;
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+      }
+      .da-name {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text-primary);
+        margin-bottom: 8px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .da-del {
+        flex-shrink: 0;
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        border: 1px solid var(--border-light);
+        background: transparent;
+        color: var(--text-secondary);
+        cursor: pointer;
+        font-size: 18px;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition:
+          color var(--transition),
+          border-color var(--transition),
+          background var(--transition);
+      }
+      .da-del:hover {
+        color: #ff5b5b;
+        border-color: #ff5b5b;
+        background: rgba(255, 91, 91, 0.1);
+      }
+      .da-files {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .file-item {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 10px 12px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-light);
+        border-radius: var(--radius);
+        transition:
+          border-color var(--transition),
+          background var(--transition);
+      }
+      .file-item:hover {
+        border-color: var(--accent);
+        background: var(--bg-card-hover);
+      }
+      .fi-thumb {
+        width: 44px;
+        height: 44px;
+        border-radius: 8px;
+        overflow: hidden;
+        flex-shrink: 0;
+        background: var(--bg-card);
+      }
+      .fi-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .fi-meta {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .fi-name {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .fi-size {
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+      .fi-del {
+        flex-shrink: 0;
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        border: 1px solid var(--border-light);
+        background: transparent;
+        color: var(--text-secondary);
+        cursor: pointer;
+        font-size: 18px;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition:
+          color var(--transition),
+          border-color var(--transition),
+          background var(--transition);
+      }
+      .fi-del:hover {
+        color: #ff5b5b;
+        border-color: #ff5b5b;
+        background: rgba(255, 91, 91, 0.1);
+      }
+
+      /* Single-image analysis card shown below the drop zone */
+      .analysis-below {
+        display: block; /* 覆盖 .drop-analysis 的 flex 行布局，使子块竖向堆叠并占满宽度 */
+        margin-top: 16px;
+        padding: 22px 26px;
+        text-align: left;
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: var(--radius);
+        animation: fade-in 0.3s ease-out both;
+      }
+
+      /* Persistent quality tip */
+      .quality-tip {
+        margin-top: 12px;
+        font-size: 11.5px;
+        line-height: 1.5;
+        color: var(--text-muted);
+      }
+      .quality-tip strong {
+        color: var(--text-secondary);
+        font-weight: 600;
+      }
+
+      /* Format selector */
+      #formatGroup {
+        grid-column: span 7;
+      }
+      .quality-group {
+        grid-column: span 5;
+      }
+      .encode-group {
+        grid-column: span 7;
+        position: relative;
+      }
+      .smart-group {
+        grid-column: span 5;
+        display: flex;
+        flex-direction: column;
+      }
+      .format-options {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 8px;
+      }
+      .format-btn {
+        background: var(--bg-elevated);
+        border: 2px solid var(--border);
+        border-radius: var(--radius);
+        padding: 14px 10px 12px;
+        text-align: center;
+        cursor: pointer;
+        transition: all var(--transition);
+        font-family: var(--font-display);
+        position: relative;
+      }
+      .format-btn:hover {
+        border-color: var(--accent-dim);
+        background: var(--bg-card-hover);
+      }
+      .format-btn.active {
+        border-color: var(--accent);
+        background: var(--accent-glow);
+        box-shadow: 0 0 12px var(--accent-glow);
+      }
+      .format-check {
+        position: absolute;
+        top: -7px;
+        right: -7px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        color: #0a0a0c;
+        font-weight: 700;
+        box-shadow: 0 0 0 2px var(--bg-card);
+        z-index: 2;
+        opacity: 0;
+        transform: scale(0.5);
+        transition: all var(--transition);
+      }
+      .format-btn.active .format-check {
+        opacity: 1;
+        transform: scale(1);
+      }
+      .format-name {
+        font-weight: 700;
+        font-size: 14px;
+        color: var(--text);
+      }
+      .format-desc {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 4px;
+      }
+      .format-btn.active .format-name {
+        color: var(--accent);
+      }
+
+      .format-count {
+        font-size: 11px;
+        color: var(--accent);
+        margin-top: 6px;
+        font-weight: 500;
+        opacity: 0;
+        transition: opacity var(--transition);
+        height: 0;
+        overflow: hidden;
+      }
+      .format-count.visible {
+        opacity: 1;
+        height: auto;
+      }
+      .format-hint {
+        margin-top: 10px;
+        font-size: 11px;
+        color: var(--text-muted);
+        line-height: 1.5;
+      }
+
+      /* Quality slider */
+      .quality-display {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
+      .quality-value {
+        font-family: var(--font-display);
+        font-size: 32px;
+        font-weight: 700;
+        color: var(--accent);
+      }
+      .quality-hint {
+        font-size: 12px;
+        color: var(--text-secondary);
+        max-width: 140px;
+        text-align: right;
+      }
+      .slider-track {
+        position: relative;
+        height: 8px;
+        background: var(--bg-elevated);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      .slider-fill {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+        border-radius: 4px;
+        transition: width 0.15s ease;
+      }
+      input[type="range"] {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        height: 8px;
+        background: transparent;
+        position: absolute;
+        top: 0;
+        margin: 0;
+        cursor: pointer;
+        z-index: 2;
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--accent);
+        border: 3px solid var(--bg-card);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        cursor: grab;
+      }
+      input[type="range"]::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--accent);
+        border: 3px solid var(--bg-card);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        cursor: grab;
+      }
+      .slider-container {
+        position: relative;
+        margin-top: 4px;
+      }
+
+      /* Process button */
+      .process-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        width: 100%;
+        padding: 14px 24px;
+        margin-top: 24px;
+        background: linear-gradient(135deg, var(--accent-dim), var(--accent));
+        border: none;
+        border-radius: var(--radius-lg);
+        color: #0a0a0c;
+        font-family: var(--font-display);
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        cursor: pointer;
+        transition: all var(--transition);
+        box-shadow: 0 4px 16px var(--accent-glow);
+      }
+      .process-btn:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 24px rgba(232, 168, 50, 0.3);
+      }
+      .process-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        transform: none;
+      }
+      .process-btn.processing {
+        animation: pulse-btn 1.5s ease-in-out infinite;
+      }
+      @keyframes pulse-btn {
+        0%,
+        100% {
+          box-shadow: 0 4px 16px var(--accent-glow);
+        }
+        50% {
+          box-shadow: 0 4px 32px rgba(232, 168, 50, 0.4);
+        }
+      }
+
+      /* Progress */
+      .progress-bar {
+        height: 4px;
+        background: var(--bg-elevated);
+        border-radius: 2px;
+        margin-top: 16px;
+        overflow: hidden;
+        opacity: 0;
+        transition: opacity var(--transition);
+      }
+      .progress-bar.visible {
+        opacity: 1;
+      }
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--accent), var(--success));
+        border-radius: 2px;
+        width: 0;
+        transition: width 0.3s ease;
+      }
+
+      /* Results area */
+      .results-area {
+        margin-top: 32px;
+      }
+      .results-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+      }
+      .results-title {
+        font-family: var(--font-display);
+        font-size: 18px;
+        font-weight: 600;
+      }
+
+      /* Stats summary */
+      .stats-summary {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+      .stat-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px 18px;
+        min-height: 96px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        text-align: center;
+      }
+      .stat-card.accent {
+        border-color: var(--accent-dim);
+        background: linear-gradient(135deg, var(--bg-card), var(--accent-glow));
+      }
+      .stat-card.success {
+        border-color: rgba(50, 216, 120, 0.3);
+        background: linear-gradient(
+          135deg,
+          var(--bg-card),
+          var(--success-glow)
+        );
+      }
+      .stat-card.warn {
+        border-color: rgba(232, 72, 72, 0.3);
+        background: linear-gradient(135deg, var(--bg-card), var(--error-glow));
+      }
+      .stat-label {
+        font-size: 11px;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 6px;
+      }
+      .stat-value {
+        font-family: var(--font-display);
+        font-size: 24px;
+        font-weight: 700;
+        line-height: 1.15;
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+      }
+      .stat-sub {
+        margin-top: 4px;
+        font-size: 11px;
+        line-height: 1.4;
+        color: var(--text-muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .stat-card.accent .stat-value {
+        color: var(--accent);
+      }
+      .stat-card.success .stat-value {
+        color: var(--success);
+      }
+      .stat-card.warn .stat-value {
+        color: var(--error);
+      }
+
+      /* Result cards */
+      .result-cards {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+      .result-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 16px 18px;
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+        transition: all var(--transition);
+        animation: fade-in 0.4s ease-out both;
+      }
+      @keyframes fade-in {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .result-card:hover {
+        border-color: var(--border-light);
+        background: var(--bg-card-hover);
+      }
+      .result-preview {
+        width: 80px;
+        height: 80px;
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+        background: var(--bg-elevated);
+        flex-shrink: 0;
+        position: relative;
+      }
+      .result-preview img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .result-info {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .result-name {
+        font-family: var(--font-display);
+        font-size: 14px;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .result-meta {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-top: 4px;
+      }
+      /* 格式结果放在右侧独立列，填充卡片横向空间 */
+      .result-badges {
+        flex: 0 0 auto;
+        width: 46%;
+        max-width: 560px;
+        align-self: flex-start;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+        gap: 6px;
+      }
+      .fmt-chip {
+        display: block;
+        width: 100%;
+        padding: 6px 9px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-light);
+        border-radius: var(--radius-sm);
+        font-family: var(--font-body);
+        text-align: left;
+        cursor: pointer;
+        transition: all var(--transition);
+      }
+      .fmt-chip:hover {
+        border-color: var(--accent);
+        background: var(--bg-card-hover);
+      }
+      .fmt-chip-top {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 6px;
+      }
+      .fmt-chip .fmt-name {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        color: var(--accent);
+      }
+      .fmt-chip .fmt-save {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--success);
+        font-variant-numeric: tabular-nums;
+      }
+      .fmt-chip .fmt-save.grow {
+        color: var(--error);
+      }
+      .fmt-chip .fmt-save.keep {
+        color: var(--text-muted);
+        font-weight: 500;
+      }
+      .fmt-chip .fmt-size {
+        display: block;
+        margin-top: 2px;
+        font-size: 10px;
+        color: var(--text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-variant-numeric: tabular-nums;
+      }
+      .btn-sm {
+        padding: 8px 14px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text-secondary);
+        font-size: 12px;
+        font-family: var(--font-body);
+        cursor: pointer;
+        transition: all var(--transition);
+      }
+      .btn-sm:hover {
+        background: var(--bg-card-hover);
+        color: var(--text);
+        border-color: var(--border-light);
+      }
+      .btn-sm.primary {
+        background: var(--accent-glow);
+        border-color: var(--accent-dim);
+        color: var(--accent);
+      }
+      .btn-sm.primary:hover {
+        background: rgba(232, 168, 50, 0.25);
+        color: var(--accent);
+      }
+      .result-card.error {
+        border-color: rgba(232, 72, 72, 0.3);
+        background: linear-gradient(135deg, var(--bg-card), var(--error-glow));
+      }
+      .result-error-msg {
+        color: var(--error);
+        font-size: 13px;
+      }
+
+      /* Download all button */
+      .download-all-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 20px;
+        background: var(--bg-card);
+        border: 1px solid var(--success);
+        border-radius: var(--radius);
+        color: var(--success);
+        font-family: var(--font-display);
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all var(--transition);
+      }
+      .download-all-btn:hover:not(:disabled) {
+        background: var(--success-glow);
+        transform: translateY(-1px);
+      }
+      .download-all-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+      }
+      .download-all-btn .spinner {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* Empty state */
+      .empty-state {
+        text-align: center;
+        padding: 40px;
+        color: var(--text-muted);
+      }
+      .empty-icon {
+        font-size: 48px;
+        margin-bottom: 12px;
+        opacity: 0.3;
+      }
+
+      /* Toast notification */
+      .toast {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%) translateY(100px);
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 12px 24px;
+        font-size: 14px;
+        box-shadow: var(--shadow-lg);
+        z-index: 1000;
+        transition: transform 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .toast.visible {
+        transform: translateX(-50%) translateY(0);
+      }
+      .toast.success {
+        border-color: var(--success);
+        color: var(--success);
+      }
+      .toast.error {
+        border-color: var(--error);
+        color: var(--error);
+      }
+
+      /* Responsive */
+      @media (max-width: 1100px) {
+        .result-cards {
+          grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+        }
+      }
+      @media (max-width: 900px) {
+        #formatGroup,
+        .quality-group,
+        .encode-group,
+        .smart-group {
+          grid-column: span 12;
+        }
+      }
+      @media (max-width: 640px) {
+        .app-container {
+          padding: 16px 16px 48px;
+        }
+        .format-options {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .stats-summary {
+          grid-template-columns: 1fr;
+        }
+        .result-cards {
+          grid-template-columns: 1fr;
+        }
+        .result-card {
+          flex-wrap: wrap;
+          padding: 14px;
+          gap: 12px;
+        }
+        .result-preview {
+          width: 60px;
+          height: 60px;
+        }
+        .result-badges {
+          width: 100%;
+          max-width: none;
+          grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+        }
+        .stat-value {
+          font-size: 20px;
+        }
+      }
+
+      /* Spinner */
+      .spinner {
+        display: inline-block;
+        width: 18px;
+        height: 18px;
+        border: 2px solid transparent;
+        border-top-color: currentColor;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* Image comparison overlay */
+      .comparison-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.85);
+        z-index: 100;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 40px;
+      }
+      .comparison-overlay.visible {
+        display: flex;
+      }
+      .comparison-container {
+        max-width: 90vw;
+        max-height: 80vh;
+        position: relative;
+      }
+      .comparison-container img {
+        max-width: 90vw;
+        max-height: 80vh;
+        object-fit: contain;
+        display: block;
+      }
+      .comparison-close {
+        position: absolute;
+        top: -40px;
+        right: 0;
+        background: none;
+        border: none;
+        color: var(--text-secondary);
+        font-size: 28px;
+        cursor: pointer;
+        padding: 8px;
+      }
+      .comparison-close:hover {
+        color: var(--text);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="noise-overlay"></div>
+    <div class="app-container">
+      <header>
+        <div class="logo">imgmin<span>.studio</span></div>
+        <button
+          class="theme-toggle"
+          id="themeToggle"
+          title="切换明暗主题"
+          aria-label="切换主题"
+        >
+          🌙
+        </button>
+      </header>
+
+      <!-- Drop zone -->
+      <div class="drop-zone" id="dropZone">
+        <div class="drop-default">
+          <svg class="drop-icon" viewBox="0 0 64 64" fill="none">
+            <rect
+              x="8"
+              y="12"
+              width="48"
+              height="40"
+              rx="4"
+              stroke="currentColor"
+              stroke-width="2"
+            />
+            <circle
+              cx="24"
+              cy="30"
+              r="6"
+              stroke="currentColor"
+              stroke-width="2"
+            />
+            <path
+              d="M8 42L22 32L34 40L48 28L56 36"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            />
+            <path
+              d="M32 4V20M24 12L32 4L40 12"
+              stroke="var(--accent)"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <div class="drop-title">拖入图片到此处</div>
+          <div class="drop-subtitle">
+            或 <em class="pick-files">选择文件</em> ·
+            <em class="pick-folder">选择文件夹</em> <br />支持
+            JPG、PNG、GIF、WebP、AVIF、BMP、TIFF（HEIC 等暂不支持）
+          </div>
+        </div>
+
+        <input
+          type="file"
+          id="fileInput"
+          accept=".jpg,.jpeg,.png,.webp,.avif,.gif,.bmp,.tif,.tiff"
+          multiple
+        />
+        <input type="file" id="folderInput" webkitdirectory hidden />
+      </div>
+
+      <!-- Uploaded files / analysis panel (shown below the drop zone, never replaces it) -->
+      <div
+        class="drop-analysis analysis-below"
+        id="dropAnalysis"
+        style="display: none"
+      >
+        <!-- 单张图片：分析详情 + 文件名 + 删除 -->
+        <div class="da-single" id="daSingle" style="display: none">
+          <div class="drop-thumb"><img id="dropThumb" alt="预览" /></div>
+          <div class="drop-info">
+            <div class="drop-info-head">
+              <span class="analysis-fmt" id="anFmt">—</span>
+              <span class="analysis-level" id="anLevel">—</span>
+            </div>
+            <div class="da-name" id="daName"></div>
+            <div class="da-body">
+              <div class="drop-info-grid">
+                <div>
+                  <span class="k">尺寸</span
+                  ><span class="v" id="anDims">—</span>
+                </div>
+                <div>
+                  <span class="k">大小</span
+                  ><span class="v" id="anSize">—</span>
+                </div>
+                <div>
+                  <span class="k">每像素比特</span
+                  ><span class="v" id="anBpp">—</span>
+                </div>
+                <div>
+                  <span class="k">色彩空间</span
+                  ><span class="v" id="anSpace">—</span>
+                </div>
+                <div>
+                  <span class="k">通道</span
+                  ><span class="v" id="anChannels">—</span>
+                </div>
+                <div>
+                  <span class="k">位深</span
+                  ><span class="v" id="anDepth">—</span>
+                </div>
+                <div>
+                  <span class="k">分辨率</span
+                  ><span class="v" id="anDensity">—</span>
+                </div>
+                <div>
+                  <span class="k">透明</span
+                  ><span class="v" id="anAlpha">—</span>
+                </div>
+                <div>
+                  <span class="k">方向</span
+                  ><span class="v" id="anOrient">—</span>
+                </div>
+              </div>
+              <div class="da-side">
+                <div class="analysis-note" id="anNote"></div>
+                <div class="analysis-rec" id="anRec"></div>
+                <button
+                  class="btn-sm primary"
+                  id="anApply"
+                  style="display: none"
+                  type="button"
+                >
+                  应用建议质量
+                </button>
+              </div>
+            </div>
+          </div>
+          <button
+            class="fi-del da-del"
+            id="daDelSingle"
+            type="button"
+            title="移除"
+            aria-label="移除"
+          >
+            ×
+          </button>
+        </div>
+        <!-- 多张图片：文件行列表 -->
+        <div class="da-files" id="daFiles"></div>
+      </div>
+
+      <!-- Settings -->
+      <div class="settings-panel">
+        <div class="setting-group" id="formatGroup">
+          <div class="setting-label">格式</div>
+          <div class="format-options">
+            <div class="format-btn" data-format="webp">
+              <div class="format-check">✓</div>
+              <div class="format-name">WebP</div>
+              <div class="format-desc">最优比例</div>
+            </div>
+            <div class="format-btn" data-format="avif">
+              <div class="format-check">✓</div>
+              <div class="format-name">AVIF</div>
+              <div class="format-desc">体积最小</div>
+            </div>
+            <div class="format-btn" data-format="jpeg">
+              <div class="format-check">✓</div>
+              <div class="format-name">JPEG</div>
+              <div class="format-desc">通用兼容</div>
+            </div>
+            <div class="format-btn" data-format="png">
+              <div class="format-check">✓</div>
+              <div class="format-name">PNG</div>
+              <div class="format-desc">无损</div>
+            </div>
+            <div class="format-btn active" data-format="original">
+              <div class="format-check">✓</div>
+              <div class="format-name">原格式</div>
+              <div class="format-desc">保留原格式</div>
+            </div>
+          </div>
+          <div class="format-hint">
+            可多选格式；默认「原格式」即保持原有类型。开启智能模式后此选择会被忽略。
+          </div>
+          <div class="format-count" id="formatCount">已选 1 种格式</div>
+        </div>
+        <div class="setting-group quality-group">
+          <div class="setting-label">质量</div>
+          <div class="quality-display">
+            <div class="quality-value" id="qualityValue">80</div>
+            <div class="quality-hint" id="qualityHint">WebP 均衡质量</div>
+          </div>
+          <div class="slider-container">
+            <div class="slider-track">
+              <div class="slider-fill" id="sliderFill" style="width: 80%"></div>
+            </div>
+            <input
+              type="range"
+              id="qualitySlider"
+              min="1"
+              max="100"
+              value="80"
+            />
+          </div>
+          <div class="quality-tip">
+            <strong>提示：</strong
+            >质量越高文件越大；已被压到极限的图用高值重编码可能反而变大（同格式变大时自动保留原图）。
+          </div>
+        </div>
+
+        <div class="setting-group encode-group">
+          <div class="setting-header">
+            <span class="setting-label setting-label-inline"
+              >编码选项
+              <div class="mutex-note" id="mutexNote" style="display: none">
+                智能模式已接管「格式 + 质量」决策，无损模式与目标体积不可用。
+              </div>
+            </span>
+          </div>
+          <label class="smart-toggle" id="losslessRow">
+            <input type="checkbox" id="losslessMode" />
+            <span class="smart-toggle-box"></span>
+            <span class="smart-toggle-text">
+              <strong>无损模式</strong>
+              <small
+                >WebP / AVIF / TIFF 原生无损（PNG 拉满压缩，JPEG
+                退回最高质量）</small
+              >
+            </span>
+          </label>
+          <div class="metric-desc" id="losslessDesc">
+            无损编码会忽略质量滑块，保留全部像素信息（体积通常更大）。
+          </div>
+
+          <div class="encode-divider"></div>
+
+          <div class="maxsize-block" id="maxSizeBlock">
+            <label class="setting-label" for="maxSizeInput">
+              <strong>目标体积</strong>
+              <small
+                >可选，如 200kb / 1.5mb；二分搜索最高质量使产物 ≤ 该体积（无损 /
+                智能模式下忽略）</small
+              >
+            </label>
+            <input
+              type="text"
+              id="maxSizeInput"
+              class="text-input"
+              placeholder="例如 200kb"
+              autocomplete="off"
+            />
+          </div>
+
+          <div class="encode-divider"></div>
+
+          <label class="smart-toggle">
+            <input type="checkbox" id="stripMeta" />
+            <span class="smart-toggle-box"></span>
+            <span class="smart-toggle-text">
+              <strong>移除元数据</strong>
+              <small
+                >该勾：发网页 / 社交 / 公开分享，想更小并隐藏
+                GPS、机型时。别勾：要留版权 / 拍摄参数 / HDR
+                色彩，或图靠方向标记摆正</small
+              >
+            </span>
+          </label>
+          <label class="smart-toggle">
+            <input type="checkbox" id="rotateExif" />
+            <span class="smart-toggle-box"></span>
+            <span class="smart-toggle-text">
+              <strong>按 EXIF 自动旋转</strong>
+              <small
+                >该勾：手机竖拍图（方向标记摆正）或同时勾了「移除元数据」，避免转正后歪图。别勾：图已转正
+                / 方向不重要</small
+              >
+            </span>
+          </label>
+        </div>
+
+        <div class="setting-group smart-group">
+          <label class="smart-toggle">
+            <input type="checkbox" id="smartMode" />
+            <span class="smart-toggle-box"></span>
+            <span class="smart-toggle-text">
+              <strong>智能模式</strong>
+              <small>内容感知选格式 + 自适应质量（SSIM / Butteraugli）</small>
+            </span>
+          </label>
+          <p class="smart-intro">
+            智能模式会按图片内容自动选格式（照片→AVIF、纯色 / 透明→WebP），用
+            SSIM / Butteraugli 自适应质量，兼顾体积与画质；开启后「格式 +
+            质量」由它接管。
+          </p>
+          <div class="smart-options dimmed" id="smartOptions">
+            <div class="metric-row">
+              <label class="metric-label" for="metricSelect">质量指标</label>
+              <select id="metricSelect" class="metric-select" disabled>
+                <option value="ssim">SSIM（默认）</option>
+                <option value="butteraugli">Butteraugli</option>
+              </select>
+            </div>
+            <div class="metric-desc" id="metricDesc">
+              开启智能模式后，可在此选择质量指标（SSIM / Butteraugli）。
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Process button -->
+      <button class="process-btn" id="processBtn" disabled>
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M10 2L2 10l8 8 8-8-8-8zM10 5l5 5-5 5-5-5 5-5z" />
+        </svg>
+        压缩图片
+      </button>
+      <div class="progress-bar" id="progressBar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+
+      <!-- Results -->
+      <div class="results-area" id="resultsArea" style="display: none">
+        <div class="results-header">
+          <div class="results-title">处理结果</div>
+          <button
+            class="download-all-btn"
+            id="downloadAllBtn"
+            style="display: none"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 12L3 7h3V1h4v6h3L8 12zM2 14h12v1H2z" />
+            </svg>
+            下载全部
+          </button>
+        </div>
+        <div class="stats-summary" id="statsSummary"></div>
+        <div class="result-cards" id="resultCards"></div>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+      // State
+      const state = {
+        files: [],
+        formats: ["original"],
+        quality: 80,
+        smart: false,
+        metric: "ssim",
+        lossless: false,
+        maxSize: "",
+        strip: false,
+        rotateExif: false,
+        processing: false,
+        zipping: false,
+        results: [],
+      };
+
+      // DOM refs
+      const dropZone = document.getElementById("dropZone");
+      const fileInput = document.getElementById("fileInput");
+      const folderInput = document.getElementById("folderInput");
+      const processBtn = document.getElementById("processBtn");
+      const progressBar = document.getElementById("progressBar");
+      const progressFill = document.getElementById("progressFill");
+      const resultsArea = document.getElementById("resultsArea");
+      const resultCards = document.getElementById("resultCards");
+      const statsSummary = document.getElementById("statsSummary");
+      const downloadAllBtn = document.getElementById("downloadAllBtn");
+      const qualitySlider = document.getElementById("qualitySlider");
+      const qualityValue = document.getElementById("qualityValue");
+      const qualityHint = document.getElementById("qualityHint");
+      const sliderFill = document.getElementById("sliderFill");
+      const formatCount = document.getElementById("formatCount");
+      const toast = document.getElementById("toast");
+      const smartMode = document.getElementById("smartMode");
+      const smartOptions = document.getElementById("smartOptions");
+      const metricSelect = document.getElementById("metricSelect");
+      const metricDesc = document.getElementById("metricDesc");
+      const losslessMode = document.getElementById("losslessMode");
+      const losslessDesc = document.getElementById("losslessDesc");
+      const maxSizeInput = document.getElementById("maxSizeInput");
+      const stripMeta = document.getElementById("stripMeta");
+      const rotateExifToggle = document.getElementById("rotateExif");
+      const losslessRow = document.getElementById("losslessRow");
+      const maxSizeBlock = document.getElementById("maxSizeBlock");
+      const mutexNote = document.getElementById("mutexNote");
+      const METRIC_DESC = {};
+      METRIC_DESC.ssim = "SSIM：结构相似性，通用均衡";
+      METRIC_DESC.butteraugli = "Butteraugli：人眼感知差异，体积更小";
+      function updateMetricDesc() {
+        metricDesc.textContent = METRIC_DESC[metricSelect.value] || "";
+      }
+      const formatGroup = document.getElementById("formatGroup");
+      const themeToggle = document.getElementById("themeToggle");
+      const dropAnalysis = document.getElementById("dropAnalysis");
+      const daSingle = document.getElementById("daSingle");
+      const daFiles = document.getElementById("daFiles");
+      const daName = document.getElementById("daName");
+      const daDelSingle = document.getElementById("daDelSingle");
+      daDelSingle.addEventListener("click", () => removeFile(0));
+      const dropThumb = document.getElementById("dropThumb");
+      const anFmt = document.getElementById("anFmt");
+      const anLevel = document.getElementById("anLevel");
+      const anDims = document.getElementById("anDims");
+      const anSize = document.getElementById("anSize");
+      const anBpp = document.getElementById("anBpp");
+      const anSpace = document.getElementById("anSpace");
+      const anChannels = document.getElementById("anChannels");
+      const anDepth = document.getElementById("anDepth");
+      const anDensity = document.getElementById("anDensity");
+      const anAlpha = document.getElementById("anAlpha");
+      const anOrient = document.getElementById("anOrient");
+      const anNote = document.getElementById("anNote");
+      const anRec = document.getElementById("anRec");
+      const anApply = document.getElementById("anApply");
+      let analysisSuggestedQuality = null;
+      let dropThumbUrl = null;
+
+      // 主题切换（黑 / 白）
+      function applyTheme(theme) {
+        document.documentElement.setAttribute("data-theme", theme);
+        try {
+          localStorage.setItem("imgmin-theme", theme);
+        } catch (e) {}
+        themeToggle.textContent = theme === "light" ? "🌙" : "☀️";
+      }
+      (function initTheme() {
+        let saved = "dark";
+        try {
+          saved = localStorage.getItem("imgmin-theme") || "dark";
+        } catch (e) {}
+        applyTheme(saved);
+      })();
+      themeToggle.addEventListener("click", () => {
+        const cur =
+          document.documentElement.getAttribute("data-theme") || "dark";
+        applyTheme(cur === "light" ? "dark" : "light");
+      });
+
+      // Quality hints per format
+      const qualityHints = {
+        webp: { low: "最大压缩", mid: "WebP 均衡质量", high: "近似无损 WebP" },
+        avif: {
+          low: "极小文件",
+          mid: "AVIF 推荐区间（50-65）",
+          high: "AVIF >70 过高",
+        },
+        jpeg: { low: "高压缩", mid: "良好 JPEG 质量", high: "高质量 JPEG" },
+        png: { low: "最小调色板", mid: "标准 PNG", high: "无损 PNG" },
+        original: { low: "高压缩", mid: "均衡质量", high: "近似无损" },
+      };
+
+      // Init format count
+      updateFormatCount();
+      updateQualityHint();
+
+      // Format selection (multi-select)
+      document.querySelectorAll(".format-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const fmt = btn.dataset.format;
+          const idx = state.formats.indexOf(fmt);
+
+          if (idx > -1) {
+            // Deselect — but prevent deselecting the last one
+            if (state.formats.length > 1) {
+              state.formats.splice(idx, 1);
+              btn.classList.remove("active");
+            }
+          } else {
+            // Select
+            state.formats.push(fmt);
+            btn.classList.add("active");
+          }
+
+          updateFormatCount();
+          updateQualityHint();
+        });
+      });
+
+      function updateFormatCount() {
+        const count = state.formats.length;
+        if (count === 1) {
+          formatCount.textContent = `已选 1 种格式 · ${state.formats[0].toUpperCase()}`;
+        } else {
+          formatCount.textContent = `已选 ${count} 种格式`;
+        }
+        formatCount.classList.add("visible");
+      }
+
+      function updateQualityHint() {
+        const q = state.quality;
+        const primaryFormat = state.formats[0] || "webp";
+        const hints = qualityHints[primaryFormat] || qualityHints.original;
+        const level = q <= 40 ? "low" : q <= 70 ? "mid" : "high";
+        qualityHint.textContent = hints[level];
+
+        // AVIF warning
+        if (state.formats.includes("avif") && q > 70) {
+          qualityHint.style.color = "var(--warning)";
+        } else {
+          qualityHint.style.color = "";
+        }
+      }
+
+      // Quality slider
+      qualitySlider.addEventListener("input", () => {
+        state.quality = parseInt(qualitySlider.value);
+        qualityValue.textContent = state.quality;
+        sliderFill.style.width = `${state.quality}%`;
         updateQualityHint();
       });
-    });
 
-    function updateFormatCount() {
-      const count = state.formats.length;
-      if (count === 1) {
-        formatCount.textContent = `已选 1 种格式 · ${state.formats[0].toUpperCase()}`;
-      } else {
-        formatCount.textContent = `已选 ${count} 种格式`;
-      }
-      formatCount.classList.add('visible');
-    }
-
-    function updateQualityHint() {
-      const q = state.quality;
-      const primaryFormat = state.formats[0] || 'webp';
-      const hints = qualityHints[primaryFormat] || qualityHints.original;
-      const level = q <= 40 ? 'low' : (q <= 70 ? 'mid' : 'high');
-      qualityHint.textContent = hints[level];
-      
-      // AVIF warning
-      if (state.formats.includes('avif') && q > 70) {
-        qualityHint.style.color = 'var(--warning)';
-      } else {
-        qualityHint.style.color = '';
-      }
-    }
-
-    // Quality slider
-    qualitySlider.addEventListener('input', () => {
-      state.quality = parseInt(qualitySlider.value);
-      qualityValue.textContent = state.quality;
-      sliderFill.style.width = `${state.quality}%`;
-      updateQualityHint();
-    });
-
-    // 依据 smart / lossless 同步「质量滑块 / 格式组 / 无损 / 目标体积」的可编辑状态
-    function syncEditableState() {
-      const lockQuality = state.smart || state.lossless;
-      qualitySlider.disabled = lockQuality;
-      qualitySlider.parentElement.parentElement.classList.toggle('dimmed', lockQuality);
-
-      // 智能模式接管「格式 + 质量」决策 → 与无损模式互斥，开启智能时关闭无损
-      if (state.smart && state.lossless) {
-        state.lossless = false;
-        losslessMode.checked = false;
-      }
-      // 智能模式才锁定格式选择；无损模式仍允许选目标格式
-      formatGroup.classList.toggle('disabled-overlay', state.smart);
-      losslessMode.disabled = state.smart;
-      losslessRow.classList.toggle('row-disabled', state.smart);
-      losslessDesc.textContent = state.smart
-        ? '智能模式已接管格式与质量决策，无损模式不可用。'
-        : state.lossless
-          ? '无损编码已开启：忽略质量滑块，保留全部像素（体积通常更大）。'
-          : '无损编码会忽略质量滑块，保留全部像素信息（体积通常更大）。';
-
-      // 目标体积：无损模式或智能模式下被忽略 → 禁用输入
-      const maxSizeLocked = state.lossless || state.smart;
-      if (maxSizeInput) maxSizeInput.disabled = maxSizeLocked;
-      if (maxSizeBlock) maxSizeBlock.classList.toggle('row-disabled', maxSizeLocked);
-
-      // 智能模式互斥提示
-      if (mutexNote) mutexNote.style.display = state.smart ? 'block' : 'none';
-    }
-
-    // Smart mode toggle
-    smartMode.addEventListener('change', () => {
-      state.smart = smartMode.checked;
-      smartOptions.style.display = state.smart ? 'block' : 'none';
-      if (state.smart) updateMetricDesc();
-      syncEditableState();
-    });
-
-    // Lossless mode toggle
-    losslessMode.addEventListener('change', () => {
-      state.lossless = losslessMode.checked;
-      syncEditableState();
-    });
-    maxSizeInput.addEventListener('input', () => {
-      state.maxSize = maxSizeInput.value.trim();
-    });
-    stripMeta.addEventListener('change', () => {
-      state.strip = stripMeta.checked;
-    });
-    rotateExifToggle.addEventListener('change', () => {
-      state.rotateExif = rotateExifToggle.checked;
-    });
-    metricSelect.addEventListener('change', () => {
-      state.metric = metricSelect.value;
-      updateMetricDesc();
-    });
-
-    // Drop zone events
-    dropZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      dropZone.classList.add('drag-over');
-    });
-    dropZone.addEventListener('dragleave', () => {
-      dropZone.classList.remove('drag-over');
-    });
-    dropZone.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      dropZone.classList.remove('drag-over');
-      const items = e.dataTransfer.items;
-      if (items && items.length > 0) {
-        const files = await getFilesFromDataTransfer(items);
-        if (files.length > 0) handleFiles(files);
-      } else {
-        handleFiles(e.dataTransfer.files);
-      }
-    });
-
-    // Click on drop zone opens file picker (except when clicking the folder link)
-    dropZone.addEventListener('click', (e) => {
-      if (e.target.closest('.pick-folder')) return;
-      fileInput.click();
-    });
-    fileInput.addEventListener('change', () => handleFiles(fileInput.files));
-
-    // Folder picker
-    document.querySelector('.pick-folder').addEventListener('click', (e) => {
-      e.stopPropagation();
-      folderInput.click();
-    });
-    document.querySelector('.pick-files').addEventListener('click', (e) => {
-      e.stopPropagation();
-      fileInput.click();
-    });
-    folderInput.addEventListener('change', () => {
-      const files = folderInput.files;
-      if (files.length === 0) return;
-      handleFiles(files);
-      // Show folder name as context
-      const folderName = files[0].webkitRelativePath.split('/')[0] || '';
-      state._folderName = folderName;
-    });
-
-    // Recursively collect files from drag-drop items (supports folders)
-    async function getFilesFromDataTransfer(items) {
-      const entries = [];
-      for (const item of items) {
-        const entry = item.webkitGetAsEntry?.() ?? null;
-        if (entry) entries.push(entry);
-      }
-      const files = [];
-      let isFolder = false;
-      for (const entry of entries) {
-        if (entry.isDirectory) isFolder = true;
-        await traverseEntry(entry, files);
-      }
-      // Set folder context for display
-      if (isFolder) state._folderName = 'dropped folder';
-      else state._folderName = null;
-      return files;
-    }
-
-    async function traverseEntry(entry, files) {
-      if (entry.isFile) {
-        const file = await new Promise((resolve) => entry.file(resolve));
-        files.push(file);
-      } else if (entry.isDirectory) {
-        const reader = entry.createReader();
-        let allEntries = [];
-        // readEntries only returns up to 100 entries per call
-        while (true) {
-          const batch = await new Promise((resolve) => reader.readEntries(resolve));
-          if (batch.length === 0) break;
-          allEntries = allEntries.concat(Array.from(batch));
-        }
-        for (const child of allEntries) {
-          await traverseEntry(child, files);
-        }
-      }
-    }
-
-    // 前端支持的输入格式（与 sharp 解码能力一致；HEIC/HEIF 等暂不解码）
-    const SUPPORTED_EXT = ['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif', 'bmp', 'tif', 'tiff'];
-    function extOf(name) {
-      const i = name.lastIndexOf('.');
-      return i >= 0 ? name.slice(i + 1).toLowerCase() : '';
-    }
-
-    function handleFiles(fileList) {
-      const all = Array.from(fileList);
-      const supported = [];
-      const rejected = [];
-      for (const f of all) {
-        if (SUPPORTED_EXT.includes(extOf(f.name))) supported.push(f);
-        else rejected.push(f.name);
-      }
-      if (supported.length === 0) {
-        // 本次选中的全部不支持：保留之前的选择并提示，不进入处理
-        const shown = rejected.slice(0, 3).join('、') + (rejected.length > 3 ? ` 等 ${rejected.length} 个` : '');
-        showToast(
-          state.files.length > 0
-            ? `已忽略 ${rejected.length} 个不支持的文件（如 HEIC）：${shown}`
-            : `不支持的格式，无法处理：${shown}`,
-          state.files.length > 0 ? 'warn' : 'error'
+      // 依据 smart / lossless 同步「质量滑块 / 格式组 / 无损 / 目标体积」的可编辑状态
+      function syncEditableState() {
+        const lockQuality = state.smart || state.lossless;
+        qualitySlider.disabled = lockQuality;
+        qualitySlider.parentElement.parentElement.classList.toggle(
+          "dimmed",
+          lockQuality,
         );
-        return;
+
+        // 智能模式接管「格式 + 质量」决策 → 与无损模式互斥，开启智能时关闭无损
+        if (state.smart && state.lossless) {
+          state.lossless = false;
+          losslessMode.checked = false;
+        }
+        // 智能模式才锁定格式选择；无损模式仍允许选目标格式
+        formatGroup.classList.toggle("disabled-overlay", state.smart);
+        losslessMode.disabled = state.smart;
+        losslessRow.classList.toggle("row-disabled", state.smart);
+        losslessDesc.textContent = state.smart
+          ? "智能模式已接管格式与质量决策，无损模式不可用。"
+          : state.lossless
+            ? "无损编码已开启：忽略质量滑块，保留全部像素（体积通常更大）。"
+            : "无损编码会忽略质量滑块，保留全部像素信息（体积通常更大）。";
+
+        // 目标体积：无损模式或智能模式下被忽略 → 禁用输入
+        const maxSizeLocked = state.lossless || state.smart;
+        if (maxSizeInput) maxSizeInput.disabled = maxSizeLocked;
+        if (maxSizeBlock)
+          maxSizeBlock.classList.toggle("row-disabled", maxSizeLocked);
+
+        // 智能模式互斥提示
+        if (mutexNote) mutexNote.style.display = state.smart ? "block" : "none";
       }
-      if (rejected.length > 0) {
-        const shown = rejected.slice(0, 3).join('、') + (rejected.length > 3 ? ` 等 ${rejected.length} 个` : '');
-        showToast(`已忽略 ${rejected.length} 个不支持的文件（如 HEIC）：${shown}`, 'warn');
+
+      // Smart mode toggle
+      function updateSmartOptions() {
+        const off = !state.smart;
+        smartOptions.classList.toggle("dimmed", off);
+        metricSelect.disabled = off;
+        metricDesc.textContent = off
+          ? "开启智能模式后，可在此选择质量指标（SSIM / Butteraugli）。"
+          : METRIC_DESC[metricSelect.value] || "";
       }
-      state.files = supported;
-      processBtn.disabled = false;
-
-      // 单张：展示分析；多张：展示文件行列表（都在下方卡片内，拖放区保持原样）
-      if (state.files.length === 1) {
-        analyzeSingle(state.files[0]);
-      } else {
-        renderPanel();
-      }
-    }
-
-    // 渲染下方卡片：有文件即显示；单图展示分析，多图展示文件行列表
-    function renderPanel() {
-      if (state.files.length === 0) {
-        hideDropAnalysis();
-        return;
-      }
-      dropAnalysis.style.display = '';
-      if (state.files.length === 1) {
-        daSingle.style.display = '';
-        daFiles.style.display = 'none';
-        daFiles.innerHTML = '';
-      } else {
-        daSingle.style.display = 'none';
-        daFiles.style.display = '';
-        renderFileRows();
-      }
-    }
-
-    // 多图：渲染文件行列表（每行缩略图 + 名称 + 大小 + 右侧删除）
-    function renderFileRows() {
-      daFiles.innerHTML = '';
-      state.files.forEach((file, i) => {
-        const item = document.createElement('div');
-        item.className = 'file-item';
-
-        const thumb = document.createElement('div');
-        thumb.className = 'fi-thumb';
-        const img = document.createElement('img');
-        const url = URL.createObjectURL(file);
-        img.src = url;
-        img.onload = () => URL.revokeObjectURL(url);
-        thumb.appendChild(img);
-
-        const meta = document.createElement('div');
-        meta.className = 'fi-meta';
-        const name = document.createElement('div');
-        name.className = 'fi-name';
-        name.textContent = file.name;
-        name.title = file.name;
-        const size = document.createElement('div');
-        size.className = 'fi-size';
-        size.textContent = formatSize(file.size);
-        meta.appendChild(name);
-        meta.appendChild(size);
-
-        const del = document.createElement('button');
-        del.className = 'fi-del';
-        del.type = 'button';
-        del.title = '移除';
-        del.setAttribute('aria-label', '移除 ' + file.name);
-        del.textContent = '×';
-        del.addEventListener('click', () => removeFile(i));
-
-        item.appendChild(thumb);
-        item.appendChild(meta);
-        item.appendChild(del);
-        daFiles.appendChild(item);
+      smartMode.addEventListener("change", () => {
+        state.smart = smartMode.checked;
+        updateSmartOptions();
+        syncEditableState();
       });
-    }
+      updateSmartOptions();
 
-    // 从已选列表中移除某个文件
-    function removeFile(index) {
-      state.files.splice(index, 1);
-      if (state.files.length === 1) {
-        analyzeSingle(state.files[0]);
-      } else {
-        renderPanel();
-      }
-      processBtn.disabled = state.files.length === 0;
-    }
+      // Lossless mode toggle
+      losslessMode.addEventListener("change", () => {
+        state.lossless = losslessMode.checked;
+        syncEditableState();
+      });
+      maxSizeInput.addEventListener("input", () => {
+        state.maxSize = maxSizeInput.value.trim();
+      });
+      stripMeta.addEventListener("change", () => {
+        state.strip = stripMeta.checked;
+      });
+      rotateExifToggle.addEventListener("change", () => {
+        state.rotateExif = rotateExifToggle.checked;
+      });
+      metricSelect.addEventListener("change", () => {
+        state.metric = metricSelect.value;
+        updateMetricDesc();
+      });
 
-    // 单张图片：调用 /api/info 做压缩潜力分析
-    async function analyzeSingle(file) {
-      // 单图：显示分析区、填文件名，缩略图本地生成（无需等待服务端）
-      dropAnalysis.style.display = '';
-      daSingle.style.display = '';
-      daFiles.style.display = 'none';
-      daFiles.innerHTML = '';
-      daName.textContent = file.name;
-      daName.title = file.name;
-      if (dropThumbUrl) { URL.revokeObjectURL(dropThumbUrl); }
-      dropThumbUrl = URL.createObjectURL(file);
-      dropThumb.src = dropThumbUrl;
+      // Drop zone events
+      dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZone.classList.add("drag-over");
+      });
+      dropZone.addEventListener("dragleave", () => {
+        dropZone.classList.remove("drag-over");
+      });
+      dropZone.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("drag-over");
+        const items = e.dataTransfer.items;
+        if (items && items.length > 0) {
+          const files = await getFilesFromDataTransfer(items);
+          if (files.length > 0) handleFiles(files);
+        } else {
+          handleFiles(e.dataTransfer.files);
+        }
+      });
 
-      const fd = new FormData();
-      fd.append('image', file);
-      try {
-        const res = await fetch('/api/info', { method: 'POST', body: fd });
-        if (!res.ok) { hideDropAnalysis(); return; }
-        const info = await res.json();
-        renderAnalysis(info);
-      } catch (e) {
-        hideDropAnalysis();
-      }
-    }
+      // Click on drop zone opens file picker (except when clicking the folder link)
+      dropZone.addEventListener("click", (e) => {
+        if (e.target.closest(".pick-folder")) return;
+        fileInput.click();
+      });
+      fileInput.addEventListener("change", () => handleFiles(fileInput.files));
 
-    function hideDropAnalysis() {
-      dropZone.classList.remove('has-analysis');
-      dropAnalysis.style.display = 'none';
-    }
+      // Folder picker
+      document.querySelector(".pick-folder").addEventListener("click", (e) => {
+        e.stopPropagation();
+        folderInput.click();
+      });
+      document.querySelector(".pick-files").addEventListener("click", (e) => {
+        e.stopPropagation();
+        fileInput.click();
+      });
+      folderInput.addEventListener("change", () => {
+        const files = folderInput.files;
+        if (files.length === 0) return;
+        handleFiles(files);
+        // Show folder name as context
+        const folderName = files[0].webkitRelativePath.split("/")[0] || "";
+        state._folderName = folderName;
+      });
 
-    // 技术细节字段的可读化映射
-    const SPACE_LABELS = { srgb: 'sRGB', 'b-w': '灰度', cmyk: 'CMYK', rgb16: 'RGB 16 位', scrgb: 'scRGB', 'rgb': 'RGB' };
-    const DEPTH_LABELS = { uchar: '8 位', ushort: '16 位', short: '16 位', uint: '32 位', int: '32 位', float: '32 位浮点', double: '64 位浮点' };
-    const ORIENT_LABELS = {
-      1: '正常', 2: '水平翻转', 3: '旋转 180°', 4: '垂直翻转',
-      5: '转置', 6: '顺时针 90°', 7: '反转置', 8: '逆时针 90°'
-    };
-
-    function renderAnalysis(info) {
-      const a = info.analysis;
-      // 基本信息始终展示：格式 / 尺寸 / 大小
-      anFmt.textContent = (info.format || '—').toUpperCase();
-      anDims.textContent = info.width && info.height ? `${info.width}×${info.height}` : '—';
-      anSize.textContent = formatSize(info.size);
-      // 技术细节
-      anSpace.textContent = SPACE_LABELS[(info.space || '').toLowerCase()] || (info.space ? String(info.space).toUpperCase() : '—');
-      anChannels.textContent = info.channels ? `${info.channels} 通道` : '—';
-      anDepth.textContent = DEPTH_LABELS[(info.depth || '').toLowerCase()] || (info.depth || '—');
-      anDensity.textContent = info.density ? `${info.density} DPI` : '—';
-      anAlpha.textContent = info.hasAlpha ? '有' : '无';
-      anOrient.textContent = ORIENT_LABELS[info.orientation] || (info.orientation ? `${info.orientation}` : '正常');
-      dropAnalysis.style.display = '';
-
-      // 缺少分析对象时，仅保留基本信息（不隐藏整张卡片）
-      if (!a) {
-        anLevel.textContent = '—';
-        anLevel.className = 'analysis-level unknown';
-        anBpp.textContent = '—';
-        anNote.textContent = '';
-        anRec.innerHTML = '';
-        anApply.style.display = 'none';
-        return;
-      }
-
-      anLevel.textContent = a.level;
-      anLevel.className = `analysis-level ${a.levelKey}`;
-      anBpp.textContent = a.bpp ? `${a.bpp} bit` : '—';
-      anNote.textContent = a.note || '';
-
-      let rec = a.recommendation || '';
-      if (a.suggestedQuality) rec += ` <strong>建议质量 ${a.suggestedQuality}</strong>`;
-      anRec.innerHTML = rec;
-
-      analysisSuggestedQuality = a.suggestedQuality;
-      anApply.style.display = a.suggestedQuality ? '' : 'none';
-    }
-
-    // 应用建议质量到滑块（仅在非智能模式时有效）
-    anApply.addEventListener('click', () => {
-      if (analysisSuggestedQuality == null || state.smart) return;
-      qualitySlider.value = analysisSuggestedQuality;
-      qualitySlider.dispatchEvent(new Event('input'));
-      showToast(`已应用建议质量 ${analysisSuggestedQuality}`, 'success');
-    });
-
-    // Process
-    processBtn.addEventListener('click', startProcessing);
-
-    async function startProcessing() {
-      if (state.processing || state.files.length === 0) return;
-      state.processing = true;
-      processBtn.disabled = true;
-      processBtn.classList.add('processing');
-      processBtn.innerHTML = '<span class="spinner"></span> 处理中...';
-      progressBar.classList.add('visible');
-      progressFill.style.width = '0%';
-
-      const formData = new FormData();
-      state.files.forEach(f => formData.append('images', f));
-      if (state.smart) {
-        formData.append('smart', '1');
-        formData.append('metric', state.metric);
-      } else {
-        state.formats.forEach(fmt => formData.append('formats', fmt));
-        formData.append('quality', state.quality);
-      }
-      if (state.lossless && !state.smart) {
-        formData.append('lossless', '1');
-      }
-      if (state.maxSize && !state.smart && !state.lossless) {
-        formData.append('maxSize', state.maxSize);
-      }
-      if (state.strip) {
-        formData.append('strip', '1');
-      }
-      if (state.rotateExif) {
-        formData.append('rotateExif', '1');
+      // Recursively collect files from drag-drop items (supports folders)
+      async function getFilesFromDataTransfer(items) {
+        const entries = [];
+        for (const item of items) {
+          const entry = item.webkitGetAsEntry?.() ?? null;
+          if (entry) entries.push(entry);
+        }
+        const files = [];
+        let isFolder = false;
+        for (const entry of entries) {
+          if (entry.isDirectory) isFolder = true;
+          await traverseEntry(entry, files);
+        }
+        // Set folder context for display
+        if (isFolder) state._folderName = "dropped folder";
+        else state._folderName = null;
+        return files;
       }
 
-      try {
-        progressFill.style.width = '30%';
-        const res = await fetch('/api/compress', { method: 'POST', body: formData });
-        progressFill.style.width = '90%';
-        
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || 'Server error');
+      async function traverseEntry(entry, files) {
+        if (entry.isFile) {
+          const file = await new Promise((resolve) => entry.file(resolve));
+          files.push(file);
+        } else if (entry.isDirectory) {
+          const reader = entry.createReader();
+          let allEntries = [];
+          // readEntries only returns up to 100 entries per call
+          while (true) {
+            const batch = await new Promise((resolve) =>
+              reader.readEntries(resolve),
+            );
+            if (batch.length === 0) break;
+            allEntries = allEntries.concat(Array.from(batch));
+          }
+          for (const child of allEntries) {
+            await traverseEntry(child, files);
+          }
+        }
+      }
+
+      // 前端支持的输入格式（与 sharp 解码能力一致；HEIC/HEIF 等暂不解码）
+      const SUPPORTED_EXT = [
+        "jpg",
+        "jpeg",
+        "png",
+        "webp",
+        "avif",
+        "gif",
+        "bmp",
+        "tif",
+        "tiff",
+      ];
+      function extOf(name) {
+        const i = name.lastIndexOf(".");
+        return i >= 0 ? name.slice(i + 1).toLowerCase() : "";
+      }
+
+      function handleFiles(fileList) {
+        const all = Array.from(fileList);
+        const supported = [];
+        const rejected = [];
+        for (const f of all) {
+          if (SUPPORTED_EXT.includes(extOf(f.name))) supported.push(f);
+          else rejected.push(f.name);
+        }
+        if (supported.length === 0) {
+          // 本次选中的全部不支持：保留之前的选择并提示，不进入处理
+          const shown =
+            rejected.slice(0, 3).join("、") +
+            (rejected.length > 3 ? ` 等 ${rejected.length} 个` : "");
+          showToast(
+            state.files.length > 0
+              ? `已忽略 ${rejected.length} 个不支持的文件（如 HEIC）：${shown}`
+              : `不支持的格式，无法处理：${shown}`,
+            state.files.length > 0 ? "warn" : "error",
+          );
+          return;
+        }
+        if (rejected.length > 0) {
+          const shown =
+            rejected.slice(0, 3).join("、") +
+            (rejected.length > 3 ? ` 等 ${rejected.length} 个` : "");
+          showToast(
+            `已忽略 ${rejected.length} 个不支持的文件（如 HEIC）：${shown}`,
+            "warn",
+          );
+        }
+        state.files = supported;
+        processBtn.disabled = false;
+
+        // 单张：展示分析；多张：展示文件行列表（都在下方卡片内，拖放区保持原样）
+        if (state.files.length === 1) {
+          analyzeSingle(state.files[0]);
+        } else {
+          renderPanel();
+        }
+      }
+
+      // 渲染下方卡片：有文件即显示；单图展示分析，多图展示文件行列表
+      function renderPanel() {
+        if (state.files.length === 0) {
+          hideDropAnalysis();
+          return;
+        }
+        dropAnalysis.style.display = "";
+        if (state.files.length === 1) {
+          daSingle.style.display = "";
+          daFiles.style.display = "none";
+          daFiles.innerHTML = "";
+        } else {
+          daSingle.style.display = "none";
+          daFiles.style.display = "";
+          renderFileRows();
+        }
+      }
+
+      // 多图：渲染文件行列表（每行缩略图 + 名称 + 大小 + 右侧删除）
+      function renderFileRows() {
+        daFiles.innerHTML = "";
+        state.files.forEach((file, i) => {
+          const item = document.createElement("div");
+          item.className = "file-item";
+
+          const thumb = document.createElement("div");
+          thumb.className = "fi-thumb";
+          const img = document.createElement("img");
+          const url = URL.createObjectURL(file);
+          img.src = url;
+          img.onload = () => URL.revokeObjectURL(url);
+          thumb.appendChild(img);
+
+          const meta = document.createElement("div");
+          meta.className = "fi-meta";
+          const name = document.createElement("div");
+          name.className = "fi-name";
+          name.textContent = file.name;
+          name.title = file.name;
+          const size = document.createElement("div");
+          size.className = "fi-size";
+          size.textContent = formatSize(file.size);
+          meta.appendChild(name);
+          meta.appendChild(size);
+
+          const del = document.createElement("button");
+          del.className = "fi-del";
+          del.type = "button";
+          del.title = "移除";
+          del.setAttribute("aria-label", "移除 " + file.name);
+          del.textContent = "×";
+          del.addEventListener("click", () => removeFile(i));
+
+          item.appendChild(thumb);
+          item.appendChild(meta);
+          item.appendChild(del);
+          daFiles.appendChild(item);
+        });
+      }
+
+      // 从已选列表中移除某个文件
+      function removeFile(index) {
+        state.files.splice(index, 1);
+        if (state.files.length === 1) {
+          analyzeSingle(state.files[0]);
+        } else {
+          renderPanel();
+        }
+        processBtn.disabled = state.files.length === 0;
+      }
+
+      // 单张图片：调用 /api/info 做压缩潜力分析
+      async function analyzeSingle(file) {
+        // 单图：显示分析区、填文件名，缩略图本地生成（无需等待服务端）
+        dropAnalysis.style.display = "";
+        daSingle.style.display = "";
+        daFiles.style.display = "none";
+        daFiles.innerHTML = "";
+        daName.textContent = file.name;
+        daName.title = file.name;
+        if (dropThumbUrl) {
+          URL.revokeObjectURL(dropThumbUrl);
+        }
+        dropThumbUrl = URL.createObjectURL(file);
+        dropThumb.src = dropThumbUrl;
+
+        const fd = new FormData();
+        fd.append("image", file);
+        try {
+          const res = await fetch("/api/info", { method: "POST", body: fd });
+          if (!res.ok) {
+            hideDropAnalysis();
+            return;
+          }
+          const info = await res.json();
+          renderAnalysis(info);
+        } catch (e) {
+          hideDropAnalysis();
+        }
+      }
+
+      function hideDropAnalysis() {
+        dropZone.classList.remove("has-analysis");
+        dropAnalysis.style.display = "none";
+      }
+
+      // 技术细节字段的可读化映射
+      const SPACE_LABELS = {
+        srgb: "sRGB",
+        "b-w": "灰度",
+        cmyk: "CMYK",
+        rgb16: "RGB 16 位",
+        scrgb: "scRGB",
+        rgb: "RGB",
+      };
+      const DEPTH_LABELS = {
+        uchar: "8 位",
+        ushort: "16 位",
+        short: "16 位",
+        uint: "32 位",
+        int: "32 位",
+        float: "32 位浮点",
+        double: "64 位浮点",
+      };
+      const ORIENT_LABELS = {
+        1: "正常",
+        2: "水平翻转",
+        3: "旋转 180°",
+        4: "垂直翻转",
+        5: "转置",
+        6: "顺时针 90°",
+        7: "反转置",
+        8: "逆时针 90°",
+      };
+
+      function renderAnalysis(info) {
+        const a = info.analysis;
+        // 基本信息始终展示：格式 / 尺寸 / 大小
+        anFmt.textContent = (info.format || "—").toUpperCase();
+        anDims.textContent =
+          info.width && info.height ? `${info.width}×${info.height}` : "—";
+        anSize.textContent = formatSize(info.size);
+        // 技术细节
+        anSpace.textContent =
+          SPACE_LABELS[(info.space || "").toLowerCase()] ||
+          (info.space ? String(info.space).toUpperCase() : "—");
+        anChannels.textContent = info.channels ? `${info.channels} 通道` : "—";
+        anDepth.textContent =
+          DEPTH_LABELS[(info.depth || "").toLowerCase()] || info.depth || "—";
+        anDensity.textContent = info.density ? `${info.density} DPI` : "—";
+        anAlpha.textContent = info.hasAlpha ? "有" : "无";
+        anOrient.textContent =
+          ORIENT_LABELS[info.orientation] ||
+          (info.orientation ? `${info.orientation}` : "正常");
+        dropAnalysis.style.display = "";
+
+        // 缺少分析对象时，仅保留基本信息（不隐藏整张卡片）
+        if (!a) {
+          anLevel.textContent = "—";
+          anLevel.className = "analysis-level unknown";
+          anBpp.textContent = "—";
+          anNote.textContent = "";
+          anRec.innerHTML = "";
+          anApply.style.display = "none";
+          return;
         }
 
-        const data = await res.json();
-        progressFill.style.width = '100%';
-        state.results = data.results;
-        showResults(data.results);
-        showToast(`已处理 ${data.results.filter(r => r.success).length} 张图片`, 'success');
-      } catch (err) {
-        showToast(err.message, 'error');
-      } finally {
-        state.processing = false;
-        processBtn.classList.remove('processing');
-        processBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2L2 10l8 8 8-8-8-8zM10 5l5 5-5 5-5-5 5-5z"/></svg> 压缩图片`;
-        processBtn.disabled = state.files.length === 0;
-        setTimeout(() => {
-          progressBar.classList.remove('visible');
-          progressFill.style.width = '0%';
-        }, 1000);
-      }
-    }
+        anLevel.textContent = a.level;
+        anLevel.className = `analysis-level ${a.levelKey}`;
+        anBpp.textContent = a.bpp ? `${a.bpp} bit` : "—";
+        anNote.textContent = a.note || "";
 
-    function showResults(results) {
-      resultsArea.style.display = '';
-      
-      const successes = results.filter(r => r.success);
-      const errors = results.filter(r => !r.success);
-      
-      // Stats
-      if (successes.length > 0) {
-        // 结果是一张原图 × N 种格式展开的，原图体积只能按「唯一文件」计一次
-        const originalByFile = new Map();
-        successes.forEach(r => {
-          if (!originalByFile.has(r.originalName)) {
-            originalByFile.set(r.originalName, Number(r.originalSize) || 0);
+        let rec = a.recommendation || "";
+        if (a.suggestedQuality)
+          rec += ` <strong>建议质量 ${a.suggestedQuality}</strong>`;
+        anRec.innerHTML = rec;
+
+        analysisSuggestedQuality = a.suggestedQuality;
+        anApply.style.display = a.suggestedQuality ? "" : "none";
+      }
+
+      // 应用建议质量到滑块（仅在非智能模式时有效）
+      anApply.addEventListener("click", () => {
+        if (analysisSuggestedQuality == null || state.smart) return;
+        qualitySlider.value = analysisSuggestedQuality;
+        qualitySlider.dispatchEvent(new Event("input"));
+        showToast(`已应用建议质量 ${analysisSuggestedQuality}`, "success");
+      });
+
+      // Process
+      processBtn.addEventListener("click", startProcessing);
+
+      async function startProcessing() {
+        if (state.processing || state.files.length === 0) return;
+        state.processing = true;
+        processBtn.disabled = true;
+        processBtn.classList.add("processing");
+        processBtn.innerHTML = '<span class="spinner"></span> 处理中...';
+        progressBar.classList.add("visible");
+        progressFill.style.width = "0%";
+
+        const formData = new FormData();
+        state.files.forEach((f) => formData.append("images", f));
+        if (state.smart) {
+          formData.append("smart", "1");
+          formData.append("metric", state.metric);
+        } else {
+          state.formats.forEach((fmt) => formData.append("formats", fmt));
+          formData.append("quality", state.quality);
+        }
+        if (state.lossless && !state.smart) {
+          formData.append("lossless", "1");
+        }
+        if (state.maxSize && !state.smart && !state.lossless) {
+          formData.append("maxSize", state.maxSize);
+        }
+        if (state.strip) {
+          formData.append("strip", "1");
+        }
+        if (state.rotateExif) {
+          formData.append("rotateExif", "1");
+        }
+
+        try {
+          progressFill.style.width = "30%";
+          const res = await fetch("/api/compress", {
+            method: "POST",
+            body: formData,
+          });
+          progressFill.style.width = "90%";
+
+          if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || "Server error");
           }
-        });
-        const totalOriginal = [...originalByFile.values()].reduce((a, b) => a + b, 0);
-        const totalCompressed = successes.reduce((s, r) => s + (Number(r.compressedSize) || 0), 0);
-        const savedBytes = totalOriginal - totalCompressed;
-        const savedRatio = totalOriginal > 0 ? (savedBytes / totalOriginal) * 100 : 0;
-        const grew = savedBytes < 0;
-        const savedValue = `${grew ? '+' : ''}${Math.abs(savedRatio).toFixed(1)}%`;
-        const savedSub = grew
-          ? `体积增加 ${formatSize(Math.abs(savedBytes))}`
-          : `省下 ${formatSize(savedBytes)}`;
-        
-        statsSummary.innerHTML = `
+
+          const data = await res.json();
+          progressFill.style.width = "100%";
+          state.results = data.results;
+          showResults(data.results);
+          showToast(
+            `已处理 ${data.results.filter((r) => r.success).length} 张图片`,
+            "success",
+          );
+        } catch (err) {
+          showToast(err.message, "error");
+        } finally {
+          state.processing = false;
+          processBtn.classList.remove("processing");
+          processBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2L2 10l8 8 8-8-8-8zM10 5l5 5-5 5-5-5 5-5z"/></svg> 压缩图片`;
+          processBtn.disabled = state.files.length === 0;
+          setTimeout(() => {
+            progressBar.classList.remove("visible");
+            progressFill.style.width = "0%";
+          }, 1000);
+        }
+      }
+
+      function showResults(results) {
+        resultsArea.style.display = "";
+
+        const successes = results.filter((r) => r.success);
+        const errors = results.filter((r) => !r.success);
+
+        // Stats
+        if (successes.length > 0) {
+          // 结果是一张原图 × N 种格式展开的，原图体积只能按「唯一文件」计一次
+          const originalByFile = new Map();
+          successes.forEach((r) => {
+            if (!originalByFile.has(r.originalName)) {
+              originalByFile.set(r.originalName, Number(r.originalSize) || 0);
+            }
+          });
+          const totalOriginal = [...originalByFile.values()].reduce(
+            (a, b) => a + b,
+            0,
+          );
+          const totalCompressed = successes.reduce(
+            (s, r) => s + (Number(r.compressedSize) || 0),
+            0,
+          );
+          const savedBytes = totalOriginal - totalCompressed;
+          const savedRatio =
+            totalOriginal > 0 ? (savedBytes / totalOriginal) * 100 : 0;
+          const grew = savedBytes < 0;
+          const savedValue = `${grew ? "+" : ""}${Math.abs(savedRatio).toFixed(1)}%`;
+          const savedSub = grew
+            ? `体积增加 ${formatSize(Math.abs(savedBytes))}`
+            : `省下 ${formatSize(savedBytes)}`;
+
+          statsSummary.innerHTML = `
           <div class="stat-card accent">
             <div class="stat-label">图片 × 格式</div>
-            <div class="stat-value">${originalByFile.size} × ${state.smart ? '自动' : state.formats.length}</div>
+            <div class="stat-value">${originalByFile.size} × ${state.smart ? "自动" : state.formats.length}</div>
           </div>
           <div class="stat-card success">
             <div class="stat-label">输出数</div>
             <div class="stat-value">${successes.length}</div>
           </div>
-          <div class="stat-card${grew ? ' warn' : ' success'}">
+          <div class="stat-card${grew ? " warn" : " success"}">
             <div class="stat-label">总节省（全部格式）</div>
             <div class="stat-value">${savedValue}</div>
             <div class="stat-sub">${savedSub}</div>
           </div>
         `;
 
-        downloadAllBtn.style.display = '';
-      }
+          downloadAllBtn.style.display = "";
+        }
 
-      // Group results by original image name
-      const grouped = new Map();
-      successes.forEach(r => {
-        if (!grouped.has(r.originalName)) grouped.set(r.originalName, []);
-        grouped.get(r.originalName).push(r);
-      });
+        // Group results by original image name
+        const grouped = new Map();
+        successes.forEach((r) => {
+          if (!grouped.has(r.originalName)) grouped.set(r.originalName, []);
+          grouped.get(r.originalName).push(r);
+        });
 
-      resultCards.innerHTML = '';
-      let idx = 0;
-      
-      // Render successful results grouped by source
-      grouped.forEach((formats, originalName) => {
-        const card = document.createElement('div');
-        card.className = 'result-card';
-        card.style.animationDelay = `${idx * 0.08}s`;
-        idx++;
+        resultCards.innerHTML = "";
+        let idx = 0;
 
-        const mainResult = formats[0];
-        const previewUrl = `/api/output-file/${mainResult.outputPath.split('/').pop()}`;
+        // Render successful results grouped by source
+        grouped.forEach((formats, originalName) => {
+          const card = document.createElement("div");
+          card.className = "result-card";
+          card.style.animationDelay = `${idx * 0.08}s`;
+          idx++;
 
-        const formatBadges = formats.map(r => {
-          const kept = !!r.keptOriginal;
-          const pct = kept ? 0 : (parseFloat(r.savedPercent) || 0);
-          const pctLabel = pct > 0
-            ? `-${pct.toFixed(1)}%`
-            : (pct < 0 ? `+${Math.abs(pct).toFixed(1)}%` : '0%');
-          const meta = [
-            r.smart ? `Q${r.quality}` : '',
-            formatSize(r.compressedSize),
-            kept ? '已保留原图' : ''
-          ].filter(Boolean).join(' · ');
-          const tip = kept
-            ? `${r.format.toUpperCase()} 压缩后未变小，已保留原图 · 点击下载`
-            : `下载 ${r.format.toUpperCase()} · ${meta}`;
+          const mainResult = formats[0];
+          const previewUrl = `/api/output-file/${mainResult.outputPath.split("/").pop()}`;
 
-          return `
-          <button class="fmt-chip${kept ? ' kept' : ''}" type="button"
+          const formatBadges = formats
+            .map((r) => {
+              const kept = !!r.keptOriginal;
+              const pct = kept ? 0 : parseFloat(r.savedPercent) || 0;
+              const pctLabel =
+                pct > 0
+                  ? `-${pct.toFixed(1)}%`
+                  : pct < 0
+                    ? `+${Math.abs(pct).toFixed(1)}%`
+                    : "0%";
+              const meta = [
+                r.smart ? `Q${r.quality}` : "",
+                formatSize(r.compressedSize),
+                kept ? "已保留原图" : "",
+              ]
+                .filter(Boolean)
+                .join(" · ");
+              const tip = kept
+                ? `${r.format.toUpperCase()} 压缩后未变小，已保留原图 · 点击下载`
+                : `下载 ${r.format.toUpperCase()} · ${meta}`;
+
+              return `
+          <button class="fmt-chip${kept ? " kept" : ""}" type="button"
                   title="${tip}"
                   onclick="downloadFile('${r.downloadUrl}', '${r.originalName}', '${r.format}')">
             <span class="fmt-chip-top">
               <span class="fmt-name">${r.format.toUpperCase()}</span>
-              <span class="fmt-save${pct < 0 ? ' grow' : ''}${kept ? ' keep' : ''}">${pctLabel}</span>
+              <span class="fmt-save${pct < 0 ? " grow" : ""}${kept ? " keep" : ""}">${pctLabel}</span>
             </span>
             <span class="fmt-size">${meta}</span>
           </button>`;
-        }).join('');
+            })
+            .join("");
 
-        const smartNote = mainResult.smart ? `
+          const smartNote = mainResult.smart
+            ? `
           <div class="smart-note">
             <span class="smart-note-reason">智能选择：${mainResult.reason}</span>
             <span class="smart-note-meta">${mainResult.qualityMetric} ${formatScore(mainResult.qualityScore)}</span>
           </div>
-        ` : '';
+        `
+            : "";
 
-        const losslessNote = mainResult.losslessNote ? `
+          const losslessNote = mainResult.losslessNote
+            ? `
           <div class="lossless-note">⚠ ${mainResult.losslessNote}</div>
-        ` : '';
+        `
+            : "";
 
-        card.innerHTML = `
+          card.innerHTML = `
           <div class="result-preview">
             <img src="${previewUrl}" alt="${originalName}" loading="lazy">
           </div>
@@ -1975,110 +2565,113 @@
           </div>
           <div class="result-badges">${formatBadges}</div>
         `;
-        resultCards.appendChild(card);
-      });
+          resultCards.appendChild(card);
+        });
 
-      // Render errors
-      errors.forEach((r, i) => {
-        const card = document.createElement('div');
-        card.className = 'result-card error';
-        card.style.animationDelay = `${(idx + i) * 0.06}s`;
-        card.innerHTML = `
+        // Render errors
+        errors.forEach((r, i) => {
+          const card = document.createElement("div");
+          card.className = "result-card error";
+          card.style.animationDelay = `${(idx + i) * 0.06}s`;
+          card.innerHTML = `
           <div class="result-preview" style="background:var(--error-glow);display:flex;align-items:center;justify-content:center;">
             <svg viewBox="0 0 24 24" width="32" height="32" fill="var(--error)">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
             </svg>
           </div>
           <div class="result-info">
-            <div class="result-name">${r.originalName}${r.format ? ' · ' + r.format.toUpperCase() : ''}</div>
+            <div class="result-name">${r.originalName}${r.format ? " · " + r.format.toUpperCase() : ""}</div>
             <div class="result-error-msg">${r.error}</div>
           </div>
         `;
-        resultCards.appendChild(card);
-      });
-    }
-
-    function downloadFile(url, filename, formatOverride) {
-      const baseName = filename.replace(/\.[^.]+$/, '');
-      const ext = formatOverride || state.formats[0];
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${baseName}.${ext}`;
-      a.click();
-    }
-
-    // Download all as zip (with re-entry guard + loading state)
-    const downloadAllBtnOriginalHTML = downloadAllBtn.innerHTML;
-
-    downloadAllBtn.addEventListener('click', async () => {
-      if (state.zipping) return;
-
-      const successes = state.results.filter(r => r.success);
-      if (successes.length === 0) return;
-
-      state.zipping = true;
-      downloadAllBtn.disabled = true;
-      downloadAllBtn.innerHTML = '<span class="spinner"></span> 正在打包...';
-
-      const filenames = successes.map(r => r.outputPath.split('/').pop());
-
-      try {
-        const res = await fetch('/api/download-zip', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ files: filenames })
+          resultCards.appendChild(card);
         });
-
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || 'Download failed');
-        }
-
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `imgmin_${new Date().toISOString().slice(0, 10)}.zip`;
-        a.click();
-        URL.revokeObjectURL(url);
-        showToast(`正在下载 ${successes.length} 个文件的压缩包`, 'success');
-      } catch (err) {
-        showToast(err.message, 'error');
-      } finally {
-        state.zipping = false;
-        downloadAllBtn.disabled = false;
-        downloadAllBtn.innerHTML = downloadAllBtnOriginalHTML;
       }
-    });
 
-    // Format quality metric score (SSIM 0~1 / Butteraugli 0~∞)
-    function formatScore(score) {
-      const n = Number(score);
-      if (!Number.isFinite(n)) return '';
-      return n.toFixed(4).replace(/\.?0+$/, '');
-    }
+      function downloadFile(url, filename, formatOverride) {
+        const baseName = filename.replace(/\.[^.]+$/, "");
+        const ext = formatOverride || state.formats[0];
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${baseName}.${ext}`;
+        a.click();
+      }
 
-    // Format size
-    function formatSize(bytes) {
-      const num = Math.abs(Number(bytes));
-      if (!Number.isFinite(num) || num === 0) return '0 B';
-      const units = ['B', 'KB', 'MB', 'GB'];
-      const k = 1024;
-      const i = Math.min(units.length - 1, Math.floor(Math.log(num) / Math.log(k)));
-      return `${(num / Math.pow(k, i)).toFixed(2)} ${units[i]}`;
-    }
+      // Download all as zip (with re-entry guard + loading state)
+      const downloadAllBtnOriginalHTML = downloadAllBtn.innerHTML;
 
-    // Toast
-    function showToast(msg, type = '') {
-      toast.textContent = msg;
-      toast.className = `toast ${type} visible`;
-      setTimeout(() => toast.classList.remove('visible'), 3000);
-    }
+      downloadAllBtn.addEventListener("click", async () => {
+        if (state.zipping) return;
 
-    // Reset drop zone on new drop
-    dropZone.addEventListener('drop', () => {
-      fileInput.value = '';
-    });
-  </script>
-</body>
+        const successes = state.results.filter((r) => r.success);
+        if (successes.length === 0) return;
+
+        state.zipping = true;
+        downloadAllBtn.disabled = true;
+        downloadAllBtn.innerHTML = '<span class="spinner"></span> 正在打包...';
+
+        const filenames = successes.map((r) => r.outputPath.split("/").pop());
+
+        try {
+          const res = await fetch("/api/download-zip", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ files: filenames }),
+          });
+
+          if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || "Download failed");
+          }
+
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `imgmin_${new Date().toISOString().slice(0, 10)}.zip`;
+          a.click();
+          URL.revokeObjectURL(url);
+          showToast(`正在下载 ${successes.length} 个文件的压缩包`, "success");
+        } catch (err) {
+          showToast(err.message, "error");
+        } finally {
+          state.zipping = false;
+          downloadAllBtn.disabled = false;
+          downloadAllBtn.innerHTML = downloadAllBtnOriginalHTML;
+        }
+      });
+
+      // Format quality metric score (SSIM 0~1 / Butteraugli 0~∞)
+      function formatScore(score) {
+        const n = Number(score);
+        if (!Number.isFinite(n)) return "";
+        return n.toFixed(4).replace(/\.?0+$/, "");
+      }
+
+      // Format size
+      function formatSize(bytes) {
+        const num = Math.abs(Number(bytes));
+        if (!Number.isFinite(num) || num === 0) return "0 B";
+        const units = ["B", "KB", "MB", "GB"];
+        const k = 1024;
+        const i = Math.min(
+          units.length - 1,
+          Math.floor(Math.log(num) / Math.log(k)),
+        );
+        return `${(num / Math.pow(k, i)).toFixed(2)} ${units[i]}`;
+      }
+
+      // Toast
+      function showToast(msg, type = "") {
+        toast.textContent = msg;
+        toast.className = `toast ${type} visible`;
+        setTimeout(() => toast.classList.remove("visible"), 3000);
+      }
+
+      // Reset drop zone on new drop
+      dropZone.addEventListener("drop", () => {
+        fileInput.value = "";
+      });
+    </script>
+  </body>
 </html>
