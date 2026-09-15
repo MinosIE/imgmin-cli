@@ -25,26 +25,42 @@ export function isEncodableFormat(format) {
  * @returns {import('sharp').Sharp} 套用编码参数后的 pipeline
  */
 /**
- * 在 sharp pipeline 上应用「EXIF 自动旋转」与「保留元数据」。
- * 默认保留原图 EXIF/IPTC/ICC/XMP；传入 keepMetadata=false（即 --strip）则丢弃。
+ * 按 EXIF Orientation 自动旋转像素（在编码 / 元数据之前执行）。
  * @param {import('sharp').Sharp} pipeline
  * @param {Object} [opts]
- * @param {boolean} [opts.keepMetadata=true] - 保留原图元数据
- * @param {boolean} [opts.rotateExif=false] - 按 EXIF Orientation 自动旋转像素（随后清除方向标记，避免二次旋转）
+ * @param {boolean} [opts.rotateExif=false] - 按 EXIF Orientation 自动旋转像素
  * @returns {import('sharp').Sharp}
  */
-export function applyMeta(pipeline, { keepMetadata = true, rotateExif = false } = {}) {
+export function applyTransforms(pipeline, { rotateExif = false } = {}) {
   let p = pipeline;
   if (rotateExif) p = p.rotate();
-  if (keepMetadata) p = p.withMetadata();
   return p;
 }
 
-export function applyEncoder(pipeline, format, quality = 80, { lossless = false, keepMetadata = true, rotateExif = false } = {}) {
-  pipeline = applyMeta(pipeline, { keepMetadata, rotateExif });
+/**
+ * 决定是否保留原图元数据（EXIF/IPTC/ICC/XMP）。
+ * @param {import('sharp').Sharp} pipeline
+ * @param {Object} [opts]
+ * @param {boolean} [opts.keepMetadata=true]
+ * @returns {import('sharp').Sharp}
+ */
+export function applyMeta(pipeline, { keepMetadata = true } = {}) {
+  return keepMetadata ? pipeline.withMetadata() : pipeline;
+}
+
+/**
+ * 仅套用目标格式的编码参数（不含变换/元数据）。
+ * @param {import('sharp').Sharp} pipeline
+ * @param {string} format - 目标格式
+ * @param {number} quality - 质量 (1-100)
+ * @param {Object} [opts]
+ * @param {boolean} [opts.lossless=false]
+ * @returns {import('sharp').Sharp}
+ */
+export function encodeFormat(pipeline, format, quality = 80, { lossless = false } = {}) {
   const numeric = Number(quality);
   const q = Number.isFinite(numeric) ? Math.min(100, Math.max(1, Math.round(numeric))) : 80;
-  
+
   switch (String(format || '').toLowerCase()) {
     case 'jpeg':
     case 'jpg':
@@ -68,6 +84,12 @@ export function applyEncoder(pipeline, format, quality = 80, { lossless = false,
       // 默认使用 JPEG
       return pipeline.jpeg({ quality: q, mozjpeg: true });
   }
+}
+
+export function applyEncoder(pipeline, format, quality = 80, { lossless = false, keepMetadata = true, rotateExif = false } = {}) {
+  pipeline = applyTransforms(pipeline, { rotateExif });
+  pipeline = applyMeta(pipeline, { keepMetadata });
+  return encodeFormat(pipeline, format, quality, { lossless });
 }
 
 /**
@@ -210,7 +232,9 @@ export async function compressImageToWebp(inputPath, outputPath, quality = 80, l
     outputPath = outputPath + '.webp';
   }
   
-  await applyMeta(sharp(inputPath), { keepMetadata, rotateExif })
+  let pipeline = applyTransforms(sharp(inputPath), { rotateExif });
+  pipeline = applyMeta(pipeline, { keepMetadata });
+  await pipeline
     .webp(lossless ? { lossless: true } : { quality: Math.min(100, Math.max(1, quality)) })
     .toFile(outputPath);
   
@@ -280,20 +304,26 @@ export async function resizeImage(inputPath, outputPath, options = {}) {
   
   const targetFormat = format || path.extname(outputPath).toLowerCase().replace('.', '');
   
-  // 目标体积优先：先按比例缩放写临时文件，再按目标体积二分搜质量
+  // 目标体积优先：先按比例缩放（含变换）写临时文件，再按目标体积二分搜质量
   if (quality !== undefined && quality !== null && maxSize && maxSize > 0 && !lossless) {
     const tmpPath = path.join(outputDir, `.imgmin_tmp_${Date.now()}_${path.basename(outputPath)}`);
-    await sharp(inputPath).resize(targetWidth ?? null, targetHeight ?? null, { fit, withoutEnlargement }).toFile(tmpPath);
+    let t = applyTransforms(sharp(inputPath), { rotateExif });
+    t = t.resize(targetWidth ?? null, targetHeight ?? null, { fit, withoutEnlargement });
+    await t.toFile(tmpPath);
     await compressImageMaxSize(tmpPath, outputPath, { format: targetFormat, targetBytes: maxSize, lossless, keepMetadata, rotateExif });
     try { fs.unlinkSync(tmpPath); } catch {}
   } else {
-    let pipeline = sharp(inputPath).resize(targetWidth ?? null, targetHeight ?? null, {
+    let pipeline = applyTransforms(sharp(inputPath), { rotateExif });
+    pipeline = pipeline.resize(targetWidth ?? null, targetHeight ?? null, {
       fit,
       withoutEnlargement
     });
     // 指定 quality 时显式套用编码参数，否则沿用 sharp 对扩展名的默认推断
     if (quality !== undefined && quality !== null) {
-      pipeline = applyEncoder(pipeline, targetFormat, quality, { lossless, keepMetadata, rotateExif });
+      pipeline = applyMeta(pipeline, { keepMetadata });
+      pipeline = encodeFormat(pipeline, targetFormat, quality, { lossless });
+    } else {
+      pipeline = applyMeta(pipeline, { keepMetadata });
     }
     await pipeline.toFile(outputPath);
   }
@@ -338,7 +368,9 @@ export async function compressImageToAvif(inputPath, outputPath, quality = 80, l
     outputPath = outputPath + '.avif';
   }
   
-  await applyMeta(sharp(inputPath), { keepMetadata, rotateExif })
+  let pipeline = applyTransforms(sharp(inputPath), { rotateExif });
+  pipeline = applyMeta(pipeline, { keepMetadata });
+  await pipeline
     .avif(lossless ? { lossless: true } : { quality: Math.min(100, Math.max(1, quality)) })
     .toFile(outputPath);
   

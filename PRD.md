@@ -292,7 +292,8 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 | 中 | CI 友好输出 `--json` / `--dry-run` / `--quiet` | 无，只能解析彩色文本 | 未开始 | `--dry-run` 可与现有「跳过判定」逻辑复用，`--json` 需统一各命令结果结构 |
 | 中 | `imgmin ui --host 0.0.0.0` | 仅支持 `-p` | 未开始 | 容器 / 局域网场景；需同步 §7.1 与 `startUIServer` |
 | 中 | 元数据控制 `--strip` / EXIF 自动旋转 | 未显式处理 | **已完成** | 引擎新增 `applyMeta`（先 `rotate()` 后 `withMetadata()`）；`keepMetadata` 默认 `true`（保留 EXIF/IPTC/ICC/XMP），`--strip` 置 false；`--rotate-exif` 按 EXIF Orientation 转正并清方向标记；CLI(默认/compress/webp/avif/convert/resize)与 UI(移除元数据 / 按 EXIF 自动旋转开关)双入口 |
-| 中 | 高级编码 / 画质参数（`--progressive` / `--effort` / `--near-lossless` / `--flatten` / `--sharpen`） | sharp 对应编码与像素变换参数未暴露 | 未开始 | 规划与冲突分析见 §11.4；编码类复用 `applyEncoder`、像素变换类复用 `applyMeta` 收口 |
+| 中 | 像素变换（转灰度 / 透明铺底 / 手动旋转） | 属编辑范畴，与压缩/优化定位冲突 | **已移除（2026-09-15 复审）** | `--greyscale` / `--flatten` / `--rotate <deg>` 经复审均归类为纯编辑能力，与 P2「编辑类全部不做」口径冲突，已从引擎 / CLI / UI 全量回退；方向修正由既有 `--rotate-exif`（EXIF 自动旋转）承担。`imgmin` 定位收口为压缩 / 格式转换 / 元数据 / 无损 / 目标体积 / EXIF 自动旋转，不做像素编辑类变换 |
+| 中 | 高级编码 / 画质参数（`--progressive` / `--effort` / `--near-lossless` / `--sharpen`） | sharp 对应编码与像素变换参数未暴露 | 未开始 | 规划与冲突分析见 §11.4；`--greyscale` / `--flatten` / `--rotate <deg>` 经复审移除（归类编辑类，已从引擎/CLI/UI 回退）；剩余 `--progressive` / `--effort`（编码类，复用 `applyEncoder`）与 `--near-lossless` / `--sharpen`（语义类，复用 `applyTransforms`）待开发 |
 | 低 | watch 增量模式 | 无 | 未开始 | 可结合 mtime + 内容 hash 跳过未变更文件 |
 | 低 | SVG 优化（svgo） | 当前被 sharp 栅格化，丢失矢量特性 | 未开始 | 需引入 svgo，并纳入 §5 输入格式说明 |
 | 低 | HEIC / HEIF 导入 | sharp 解码不支持 | 未开始 | 见 §5、§10；需额外解码依赖 |
@@ -320,22 +321,24 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 
 ### 11.4 高级编码与画质参数（待开发）· 冲突分析
 
-> 本节为**规划项（均未实现）**，用于在动工前锁定「与现有 `--lossless` / `--max-size` / `--strip` / `--rotate-exif` / 智能模式的相互作用」，避免实现时产生二义行为。
-> 复用点：编码类参数统一进 `applyEncoder(pipeline, format, quality, { lossless, keepMetadata, rotateExif, ... })`；像素变换类统一进 `applyMeta`。
-> 执行顺序约定：`rotate()`（EXIF 转正）→ 像素变换（flatten / sharpen）→ `withMetadata()`（元数据）→ 编码（quality / lossless / effort / progressive）。
+> 本节为规划与冲突分析区。`--greyscale` / `--flatten` / `--rotate <deg>` 经复审均归类为纯编辑能力、与 P2「编辑类全部不做」口径冲突，已于 2026-09-15 全量回退（引擎 `applyTransforms` 现仅保留 EXIF 自动旋转）；其余 `--progressive` / `--effort` / `--near-lossless` / `--sharpen` 仍为待开发规划项。
+> 复用点：编码类参数统一进 `applyEncoder(pipeline, format, quality, { lossless, keepMetadata, rotateExif, ... })`；EXIF 自动旋转统一进 `applyTransforms`（先于 `applyMeta` 执行，仅处理 `rotateExif`）。
+> 执行顺序约定：`applyTransforms`（仅 `--rotate-exif` 自动转正）→ `withMetadata()`（元数据）→ 编码（quality / lossless / effort / progressive）。
 
 | 参数 | 作用 / 适用格式 | 与现有功能冲突判定 | 采用的处理规则（拟） |
 |---|---|---|---|
 | `--progressive` | 渐进式 / 交错：JPEG（`progressive`）、PNG（`progressive` / Adam7）、WebP 无此选项 | **无冲突**（与 `lossless`、`max-size` 正交） | 全程透传；`--max-size` 二分搜索的每次试编码与最终编码都携带该开关，保证收敛对象一致 |
 | `--effort <n>` | 编码耗时 ↔ 质量权衡：AVIF 0-9、WebP 0-6、PNG 0-10 | **无冲突** | 按目标格式校验并夹取范围；对不支持的格式忽略；WebP / AVIF 无损模式下同样接受 effort |
 | `--near-lossless [0-100]` | WebP 专用「近无损」预测 | **语义重叠**（与 `--lossless` 同属无损族，非硬冲突） | 仅对 WebP 生效，其它格式忽略并提示；与 `--lossless` 同时给出时以 near-lossless 为准；与 `--max-size` 沿用无损族规则（**忽略 max-size**）以消除二义 |
-| `--flatten [color]` | 去除 alpha 并按指定底色（默认 `#ffffff`）铺底；无 alpha 输入等价无效 | **与透明语义冲突**（PNG / WebP 透明将被丢弃） | 显式使用时在结果中提示「已移除透明」；智能模式开启时 `analyzeImage` 的 `hasAlpha` 分支让位于 flatten（按不透明处理）；与 `--strip`、`--lossless` 无直接冲突 |
+| `--flatten [color]` | 去除 alpha 并按指定底色（默认 `#ffffff`）铺底 | **与透明语义冲突**（PNG / WebP 透明将被丢弃） | **已移除（2026-09-15 复审）**：归类为纯编辑能力，与 P2「编辑类全部不做」口径冲突，已从引擎 / CLI / UI 全量回退；透明处理交由用户前期或外部工具 |
+| `--greyscale` | 转灰度（R=G=B），适用于所有输出格式 | **与 `--lossless` 正交**（仅改像素、不影响无损判定） | **已移除（2026-09-15 复审）**：归类为纯编辑能力，与 P2「编辑类全部不做」口径冲突，已从引擎 / CLI / UI 全量回退；若日后定位扩展为「轻量变换」工具可再纳入 |
+| `--rotate <deg>` | 按度数旋转（90 / 180 / 270 等），适用于所有输出格式 | **覆盖 `--rotate-exif`**（手动旋转优先于 EXIF 转正） | **已移除（2026-09-15 复审）**：归类为纯编辑能力，与 P2「编辑类全部不做」口径冲突，已从引擎 / CLI / UI 全量回退；方向修正由 `--rotate-exif` 承担 |
 | `--sharpen [sigma]` | 锐化（USM）；适用于所有有损 / 无损输出 | **与 `--lossless` 硬冲突**（改变像素 → 相对原图不再无损） | 像素变换类与 `--lossless` 互斥：同时给出时以 `--lossless` 优先并忽略锐化（附提示），或 CLI 直接报错退出（实现时二选一，倾向「忽略 + 提示」）；与 SSIM 自适应质量搜索有交互（锐化会拉低相对原图的 SSIM，需按变换后基准比较或提示） |
 
 **通用结论**
 
 - **编码类（`--progressive` / `--effort`）**：与现有功能**不冲突**，可直接沿用 `lossless` / `maxSize` 的既有透传模式补齐（含 CLI 各命令与 UI）。
-- **语义类（`--near-lossless` / `--flatten` / `--sharpen`）**：**存在需要显式裁决的交集**——无损族归属、透明丢弃、像素变换 vs 无损；规则同上表，实现时必须同步 CLI 提示与 UI 开关的禁用 / 联动。
+- **语义类（`--near-lossless` / `--sharpen`）**：**存在需要显式裁决的交集**——无损族归属、像素变换 vs 无损；`--greyscale` / `--flatten` / `--rotate <deg>` 经 2026-09-15 复审均归类为纯编辑能力、已全量回退；剩余 `--near-lossless` / `--sharpen` 规则同上表，实现时必须同步 CLI 提示与 UI 开关的禁用 / 联动。
 - **通用像素变换（后续扩展）**：凡改变像素的参数（blur / normalize / modulate / tint 等）与本节的 `--sharpen` 同属「与 `--lossless` 互斥」一类，统一按同一规则处理。
 
 ---
@@ -394,6 +397,13 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 - 引擎新增 `applyMeta(pipeline, { keepMetadata, rotateExif })`：先 `rotate()`（按 EXIF Orientation 自动旋转像素，随后由 `withMetadata()` 清除方向标记避免二次旋转），再 `withMetadata()` 保留 EXIF/IPTC/ICC/XMP；在 `applyEncoder` 与各格式 handler（`compressImageToWebp`/`ToAvif`）及 `convertImage`/`resizeImage` 中统一套用。
 - CLI 新增 `--strip`（丢弃元数据，默认 `keepMetadata=true` 即保留）与 `--rotate-exif`（自动旋转），贯穿默认 / compress / webp / avif / convert / resize 全部命令及内部批量/单文件 helper；UI 新增「移除元数据」「按 EXIF 自动旋转」开关，经 `/api/compress` 的 `strip` / `rotateExif` 透传。
 - 改变旧行为：此前「压缩即丢元数据」为隐式，现默认保留元数据（与 `--strip` 形成显式控制）。
+
+### 2026-09-15 · 像素变换（--greyscale / --flatten / --rotate）经复审全量回退
+- 引擎曾新增 `applyTransforms` 收口 `flatten` / `rotate(deg)`；经复审 `--greyscale` / `--flatten` / `--rotate <deg>` 三者均归类为纯编辑能力，与 P2「编辑类全部不做」口径冲突，已从引擎 / CLI / UI 全量回退；`applyTransforms` 现仅保留 EXIF 自动旋转（`rotateExif`）。
+- 引擎 6 个编码入口（`compressImage` / `compressImageMaxSize` / `compressImageToWebp` / `compressImageToAvif` / `compressImageToFormat` / `resizeImage`）与 `convertImage` 均接收并透传这三个字段；`buildEncodeOptions` 把它们并入 options，各格式 handler 通过 `applyTransforms` 套用。
+- CLI 曾新增 `--flatten` / `--rotate <deg>`（已回退）；方向修正由既有 `--rotate-exif` 承担。
+- UI「编码选项」组的「透明铺底」开关与「旋转角度」输入框已移除；`/api/compress` 不再接收 `flatten` / `rotate`。
+- 定位收口：`imgmin` 不做任何像素编辑类变换（转灰度 / 透明铺底 / 手动旋转 / 锐化 / 模糊 / 滤镜 / 水印），仅保留压缩 / 格式转换 / 元数据 / 无损 / 目标体积 / EXIF 自动旋转。
 
 ### 2026-09-14 · 进度可视化（第 11 节重构）
 - 第 11 节由「路线图（候选 / 当前未实现）」重构为「**能力缺口与路线图（含执行进度）**」：

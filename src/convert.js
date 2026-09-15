@@ -1,7 +1,7 @@
 import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
-import { compressImageMaxSize, losslessNoteFor, applyMeta } from './compress.js';
+import { compressImageMaxSize, losslessNoteFor, applyMeta, applyTransforms } from './compress.js';
 
 /**
  * 图片格式转换
@@ -40,7 +40,8 @@ export async function convertImage(inputPath, outputPath, options = {}) {
     };
   }
   
-  let pipeline = applyMeta(sharp(inputPath), { keepMetadata, rotateExif });
+  let pipeline = applyTransforms(sharp(inputPath), { rotateExif });
+  pipeline = applyMeta(pipeline, { keepMetadata });
   
   switch (targetFormat) {
     case 'jpeg':

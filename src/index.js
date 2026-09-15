@@ -36,6 +36,8 @@ program
     const maxSize = parseSizeToBytes(options.maxSize);
     const keepMetadata = !options.strip;
     const rotateExif = options.rotateExif || false;
+  
+
     
     try {
       const currentDir = process.cwd();
@@ -176,6 +178,8 @@ program
     const maxSize = parseSizeToBytes(options.maxSize);
     const keepMetadata = !options.strip;
     const rotateExif = options.rotateExif || false;
+  
+
     
     const spinner = ora('Processing...').start();
     
@@ -275,6 +279,8 @@ function createFormatCommand(format) {
     const maxSize = parseSizeToBytes(options.maxSize);
     const keepMetadata = !options.strip;
     const rotateExif = options.rotateExif || false;
+  
+
     
     const sourcePath = source || process.cwd();
     const quality = options.quality ?? (config.quality || defaultQuality);
@@ -348,6 +354,8 @@ program
   .option('--force', 'Overwrite existing target files')
   .option('--lossless', 'Lossless WebP/AVIF encoding')
   .option('--max-size <size>', 'Target output size, e.g. 200kb, 1.5mb')
+  .option('--strip', 'Remove metadata (EXIF/IPTC/ICC/XMP) from output')
+  .option('--rotate-exif', 'Auto-rotate according to EXIF Orientation')
   .action(createFormatCommand('webp'));
 
 // 转换为 AVIF 命令
@@ -383,6 +391,8 @@ program
     const lossless = options.lossless || false;
     const keepMetadata = !options.strip;
     const rotateExif = options.rotateExif || false;
+  
+
     
     try {
       const ext = path.extname(output).toLowerCase().replace('.', '');
@@ -428,6 +438,8 @@ program
     const lossless = options.lossless || false;
     const keepMetadata = !options.strip;
     const rotateExif = options.rotateExif || false;
+  
+
 
     const fail = (message) => {
       console.log(chalk.red(`\n✗ ${message}\n`));

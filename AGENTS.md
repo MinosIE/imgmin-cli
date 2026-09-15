@@ -57,7 +57,7 @@ bin/cli.js ──import──▶ src/index.js        (CLI 入口 + 子命令定�
 |---|---|---|---|
 | 入口 | `bin/cli.js` | 仅 `import '../src/index.js'`，无逻辑 | 不放业务逻辑 |
 | CLI 编排 | `src/index.js` | 定义全部子命令、解析参数、调用压缩/转换、目录遍历 `processDirectory` / `compressSingleFile`、智能命令 | 不直接调 sharp（委托 compress.js） |
-| 压缩 | `src/compress.js` | `compressImage` / `compressImageToWebp` / `compressImageToAvif` / `compressImageToFormat` / `resizeImage` / `compressDirectory`；导出 `applyEncoder`（编码参数统一收口）、`isEncodableFormat`、`RESIZE_FITS` | 不发网络请求 |
+| 压缩 | `src/compress.js` | `compressImage` / `compressImageMaxSize` / `compressImageToWebp` / `compressImageToAvif` / `compressImageToFormat` / `resizeImage` / `compressDirectory`；导出 `applyTransforms`（EXIF 自动旋转收口）、`applyMeta`（元数据 + EXIF 旋转）、`buildEncodeOptions`、`encodeFormat`（按格式编码 + withMetadata）、`isEncodableFormat`、`RESIZE_FITS` | 不发网络请求 |
 | 转换 | `src/convert.js` | `convertImage` 及 per-format helper、`getSupportedFormats` | |
 | 工具 | `src/utils.js` | `glob`、`getImageInfo`、`formatFileSize`、`isImageFile`、`ensureDir`、`batchProcess` | 不含业务逻辑 |
 | 配置 | `src/config.js` | 读写 `~/.imgminrc`（JSON） | |
@@ -116,7 +116,7 @@ CLI 智能：`imgmin smart <src> → index.js → smartSuggest(file) → analyze
 - **现象**：下载 zip 报 `TypeError: self._module.on is not a function` → **根因**：archiver v8 是纯 ESM，`new archiver.Archiver('zip', opts)` 实例化的是未初始化 `_module` 的基类 → **正确**：`import { ZipArchive } from 'archiver'; new ZipArchive({ zlib: { level: 1 } })`（已在 `1f4cd88` 修复，勿回退）。
 - **现象**：压缩后文件反而变大 → **根因**：源已高度压缩 / 质量过高 → **正确**：`compressSingleFile`/`processDirectory` 已有「更大则跳过」逻辑；智能模式用低质量目标避免。
 - **现象**：`--lossless` 与 `--max-size` 同时传，WebP/AVIF 体积退化为恒定值（二分搜索永远达标/永远不达标）→ **根因**：lossless 分支忽略 quality，max-size 二分失效 → **正确**：引擎 6 处 maxSize 分支统一加 `&& !lossless` 守卫，无损优先、忽略 max-size；JPEG 无原生无损，`--lossless` 退回 q100，引擎返回 `losslessNote` 提示（CLI 黄色 ⚠、UI 橙色提示条），UI 勾选无损时自动禁用目标体积输入框。
-- **现象**：压缩后元数据（拍摄时间/相机/GPS）仍残留 → **根因**：sharp 默认丢元数据，旧实现无显式控制 → **正确**：`applyMeta` 在 `applyEncoder` 与各格式 handler 内先 `rotate()`（可选）后 `withMetadata()`；`keepMetadata` 默认 `true`（保留），CLI `--strip` 置 `false` 丢弃，UI「移除元数据」开关对应 `strip=1`；`--rotate-exif` 经 `rotate()` 转正并清方向标记避免二次旋转。
+- **现象**：压缩后元数据（拍摄时间/相机/GPS）仍残留 → **根因**：sharp 默认丢元数据，旧实现无显式控制 → **正确**：`applyTransforms` 先于 `applyMeta` 执行（处理 EXIF 自动旋转），`applyMeta` 在各格式 handler 内调 `withMetadata()`；`keepMetadata` 默认 `true`（保留），CLI `--strip` 置 `false` 丢弃，UI「移除元数据」开关对应 `strip=1`；`--rotate-exif` 由 `applyTransforms` 经 `rotate()` 转正并清方向标记避免二次旋转。
 - **现象**：Web 端同时勾选「智能模式」与「无损模式 / 目标体积」，结果卡片显示的质量与产物不符 → **根因**：三者都在决定质量（智能=自适应质量、无损=忽略质量、目标体积=二分搜质量），叠加时后者静默覆盖智能质量，且结果回显的是建议质量 → **正确**：UI 层互斥——开启智能模式即禁用并置灰「无损模式」「目标体积」、关闭已开无损、显示提示条，提交对 `lossless`/`maxSize` 加 `!smart` 守卫；`ui.js` 智能分支回显 `compressImage` 实际返回的 `quality`。「移除元数据」「EXIF 旋转」与智能模式正交，不禁用。
 - **现象**：拖入文件夹提示「不支持」→ **根因**：`dataTransfer.files` 对文件夹为空 → **正确**：用 `webkitGetAsEntry()` 递归遍历（已在 `288a592` 修复）。
 - **现象**：UI 改了没反应 → **根因**：忘了重启 `imgmin ui`，或改错文件（应为 `src/ui-public/index.html` 而非其他） → **正确**：重启服务。
@@ -126,6 +126,7 @@ CLI 智能：`imgmin smart <src> → index.js → smartSuggest(file) → analyze
 - **现象**：并发压缩时报错或产物损坏 → **根因**：同目录多个源文件（`photo.jpg` + `photo.png`）映射到同一输出路径并发写 → **正确**：`processDirectory` / `processDirectoryResize` 用 `claimedOutputs` 认领路径，冲突者跳过并提示 `Skip (duplicate output)`。
 - **现象**：`/api/smart-analyze` 报 `ReferenceError: outputDir` → **根因**：该 handler 复用了 `/api/compress` 闭包里的 `outputDir`，自己没声明作用域 → **正确**：每个 handler 都自己写 `const outputDir = path.join(os.tmpdir(), 'imgmin-ui-output')`（已在 PRD §13 记录的那次修复）。
 - **现象**：`npm test` 里的 `tests/http.test.js` 起不来 / 跑完不退出 → **根因**：该文件会 `execFile` 派生子进程跑 `imgmin ui`（含 `setInterval` 清理定时器），父进程不应被拖住 → **正确**：用 `test.before` 起服务、`test.after` 里 `child.kill('SIGTERM')`；本地用 `IMGMIN_NO_BROWSER=1` 跳过弹浏览器。
+- **现象**：转 WebP / AVIF 后透明区域变成黑底，或想要手动旋转角度却没生效 → **根因**：`--flatten` / `--rotate <deg>` 经复审归类为纯编辑能力（与 `--greyscale`、P2 编辑类一致），已从引擎 / CLI / UI 全量回退，不再提供 → **正确**：方向修正需求由 `--rotate-exif`（EXIF 自动旋转）承担（见上方元数据控制踩坑）；透明铺底 / 手动旋转如需保留，应交给用户前期处理或外部工具。三者（转灰度 / 透明铺底 / 手动旋转）均与 `--lossless` 正交但属编辑范畴，本期不纳入。
 
 ### 3.5 推荐开发流程
 1. 改 `src/*.js`（ESM）或 `src/ui-public/index.html`。
@@ -173,3 +174,4 @@ CLI 智能：`imgmin smart <src> → index.js → smartSuggest(file) → analyze
 ## 6. 变更记录（本文件）
 - 2026-09-14：初始生成 AGENTS.md。覆盖架构、模块职责、UI 字段契约、archiver v8 / 智能模式 / 拖文件夹等真实踩坑与依赖联动表。
 - 2026-09-14（二次）：新增 `resize` 命令与 `-j/--concurrency` 的模块职责与联动说明；补充测试规范（`tests/` 采集规则、隔离 HOME）；新增 4 条真实踩坑（`smartSuggest` 缺 `originalSize`、`glob` 非递归花括号、`resizeImage` 校验顺序、并发重复输出）；更新第 5 节状态（测试已补、resize 已上线）。
+- 2026-09-15：曾新增像素变换 `--flatten` / `--rotate <deg>` / `--greyscale`（引擎 `applyTransforms` 收口）；经复审三者均归类为纯编辑能力，与 P2（锐化/模糊/滤镜/水印「全部不做」）口径冲突，已全量回退（引擎 `applyTransforms` 现仅保留 EXIF 自动旋转）。同步更新第 1.4 节模块职责、第 3.4 节踩坑、第 5.1 节状态。定位收口为：`imgmin` = 压缩 / 格式转换 / 元数据 / 无损 / 目标体积 / EXIF 自动旋转，不做任何像素编辑类变换。
