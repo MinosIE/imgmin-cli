@@ -69,7 +69,7 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 |---|---|---|
 | CLI | 默认批量命令 / config / compress(c) / smart / webp / avif / convert / resize / info / ui | 已实现 |
 | Web UI | 拖拽上传、文件夹上传、格式多选、质量滑块、智能开关、单图压缩潜力分析、结果卡片、Download All(zip) | 已实现 |
-| 智能模式 | 内容感知选格式 + SSIM/Butteraugli/PSNR 自适应质量 | 已实现（Butteraugli 为近似，规划真值化见 §11.2） |
+| 智能模式 | 内容感知选格式 + SSIM/Butteraugli/PSNR 自适应质量 | 已实现（Butteraugli 默认走近似，构建原生插件后回算权威真值，见 §6.2 / §11.2） |
 | 模块 API | `compressImage` / `resizeImage` / `convertImage` / `getImageInfo` / `glob` 等 | 已实现 |
 | 批量并发 | `-j, --concurrency`（1-32，默认 4） | 已实现 |
 | 自动化测试 | `npm test`（`node --test`，`tests/*.test.js` 单元 + CLI 端到端） | 已实现（首批） |
@@ -191,7 +191,7 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 - 以指标驱动，在 `[1, maxQuality=82]` 区间二分，找「刚好满足阈值」的最小质量（体积最大）。
 - 指标：
   - **SSIM（默认）**：自实现简化版（亮度通道高斯近似），阈值 `≥0.95`，越大越好。
-  - **Butteraugli（真值化规划中）**：感知加权逐像素色差，暗部更敏感，阈值 `≤1.2`，越小越好。当前为自实现近似；规划改用 `@squoosh-kit/visdif`（Emscripten/WASM 版 Google Butteraugli）计算真实分数，见 §11.2 / §13。
+  - **Butteraugli**：感知加权距离，暗部更敏感，阈值 `≤1.2`，越小越好。默认由自实现近似（CIELAB 多尺度加权）驱动质量二分；若已编译原生插件 `native/butteraugli`（Google 官方 C++ 经 `node-gyp` 构建的 N-API 插件），最终 `score` 回算**权威真值**，未编译则静默回退近似，保持零运行时依赖。见 §11.2。
   - **PSNR**：基于 RGB 通道 MSE 的峰值信噪比（dB），阈值 `≥38`，越大越好；零新依赖，补全「误差 / 结构 / 感知」三类指标谱系。
 - 上限质量仍不达标时退回最高质量。
 
@@ -265,7 +265,7 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 ## 10. 已知限制与技术债务
 
 - **HEIC / HEIF 不支持**：sharp 解码能力缺失；Web UI 已前端拦截，但 CLI 直接传 HEIC 会因 sharp 报错。
-- **Butteraugli 近似实现（规划替换）**：当前为自实现近似，非 Google 原生，仅用于驱动质量二分；规划以 `@squoosh-kit/visdif`（WASM 真值 Butteraugli）替换，见 §11.2。
+- **Butteraugli 默认近似 + 可选权威插件**：质量二分仍由自实现近似（CIELAB 多尺度加权）驱动以保证稳定；构建 `native/butteraugli` 原生插件后，`score` 回算 Google 官方 Butteraugli 真值，未构建自动回退近似，不影响默认离线零依赖。见 §11.2。
 - **`analyzeImage` 阈值经验化**：照片/图标/纯色判定为启发式，复杂图可能选错格式。
 - **智能模式 CLI 目录汇总不展示 per-file 理由**：仅终端打印，未结构化汇总。
 - **极小透明 PNG 转 PNG 可能变大**：已默认转 WebP 缓解。
@@ -306,7 +306,7 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
 
 - **智能模式 · CLI 汇总**：批量目录模式下结构化汇总每张图的决策理由（当前仅逐行打印到终端）。
 - **智能模式 · UI 决策卡片**：Web 结果区展示 per-file 决策（格式 / 质量 / 指标分数 / 理由）。
-- **智能模式 · 指标精度 · Butteraugli 近似升级（执行中）**：原生 Butteraugli 在 Node 下无可用依赖（`@squoosh-kit/visdif` 实测 WASM 加载失败、`butteraugli`@0.0.2 年久风险高，见 §13），故不引入原生依赖；改为**升级现有近似**为更接近真值的实现——sRGB→CIELAB 正确转换 + 多尺度（1x/0.5x/0.25x）误差 + 暗部敏感权重 + 对比度掩蔽 + Minkowski(p≈0.6) 空间池化并兼顾最差区域，输出标定到 ~Butteraugli 量纲（0=相同，≤1.2 视为达标）。指标名 `butteraugli` 与 CLI/UI 契约不变，SSIM 本次不替换。
+- **智能模式 · 指标精度 · Butteraugli 权威真值（已实现）**：`@squoosh-kit/visdif`（WASM）实测在 Node 下无法给出正确数值（embind `std::string` 入参按 UTF-8 破坏字节 ≥128、量纲被放大数十倍，均匀 Δ50→80 竟得 35），公开 API 无底层 C 函数可绕过，故放弃 WASM 路线。改为 vendor Google 官方 Butteraugli C++（`native/butteraugli/butteraugli.h` + `butteraugli.cc`），以纯 N-API 绑定 + `node-gyp` 编译为 `butteraugli.node`；`findOptimalQuality(metric:'butteraugli')` 的最终 `score` 回算权威真值，质量二分仍用 CIELAB 多尺度近似（稳定、测试不敏感），插件未构建/加载失败时静默回退近似，保持默认离线零依赖。指标名 `butteraugli` 与 CLI/UI 契约不变。
 - **智能模式 · 指标精度 · SSIM**：维持当前自实现简化版（阈值 `≥0.95`），本次不替换；如后续需要更精确 SSIM 可单独规划（不在本次范围）。
 - **智能模式 · 自适应质量扩展**：把自适应质量扩展到 AVIF 之外的有损格式（当前 JPEG / PNG 走固定质量）。
 - **并发模型**：当前为分批 `Promise.allSettled`，如需精细限流可引入 `p-limit` 风格调度。
@@ -413,6 +413,11 @@ bin/cli.js ──▶ src/index.js (CLI 编排)
   - 新增 **11.2 待细化项**：收纳原路线图 6 条未开始方向，并补充 Web API 集成测试的具体端点清单。
   - 新增 **11.3 本次迭代完成情况**：映射本次交付物到具体文件。
 - 文档头部与 §12 增加「进度维护约定」：完成能力后须更新第 11 节状态并追加本节记录。
+
+### 2026-10-26 · 引入 Google 官方原生 Butteraugli（N-API 插件）
+- 背景：2026-09-15 曾规划以 `@squoosh-kit/visdif`（WASM）替换近似，但该包在 Node 下实测无法给出正确数值（embind `std::string` 入参按 UTF-8 破坏字节 ≥128、量纲被放大数十倍，均匀 Δ50→80 竟得 35），公开 API 无底层 C 函数可绕过，故放弃 WASM 路线。
+- 方案（§6.2 / §10 / §11.2 / AGENTS.md §1.5·§5.4 同步）：vendor Google 官方 Butteraugli C++（`native/butteraugli/butteraugli.h` + `butteraugli.cc`），以纯 N-API 绑定（`butteraugli_binding.cc`）+ `binding.gyp` 经 `node-gyp` 编译为 `native/butteraugli/build/Release/butteraugli.node`；`src/smart.js` 懒加载该插件，`findOptimalQuality(metric:'butteraugli')` 最终 `score` 回算权威真值，未构建/加载失败时静默回退既有 CIELAB 多尺度近似。仅构建期需要 C++ 编译器 + Node 头，零额外运行时依赖。
+- 验证：same=0、q90≈2.9、q20≈6.2，量级与方向正确；`node --test` 8/8 通过。构建产物（`build/`、`*.node`）已 gitignore，C++ 源码随仓库提交。
 
 ### 2026-09-15 · PRD 规划：Butteraugli 真值化（替换近似实现）
 - 背景：`src/smart.js` 的 `findOptimalQuality` 中 Butteraugli 为自实现近似（非 Google 原生），仅用于驱动质量二分。用户要求改用真实 Butteraugli。

@@ -125,8 +125,9 @@ imgmin c input.jpg --no-webp                  # 只压缩，不生成 WebP 版�
 - `--no-webp` - 不生成 WebP 版本
 - `--force` - 用压缩后的文件替换原文件（无 `_compressed` 后缀）
 - `--smart` - 智能模式：内容感知选格式 + 自适应质量（SSIM/Butteraugli）
-- `--metric <type>` - 智能模式指标：`ssim`（默认）或 `butteraugli`
-- `--threshold <number>` - 智能模式质量阈值（SSIM≥0.95、Butteraugli≤1.2 为默认）
+- `--metric <type>` - 智能模式指标：`ssim`（默认）、`butteraugli`、`psnr`
+- `--threshold <number>` - 智能模式质量阈值（SSIM≥0.95、Butteraugli≤1.2、PSNR≥38dB 为默认）
+- 高级：Butteraugli 默认用内置近似算法；若需 Google 官方**权威真值**，可在 `native/butteraugli` 目录执行 `npx node-gyp rebuild` 编译原生插件（需 C++ 编译器与 Node 头），未编译时自动回退近似，不影响默认离线零依赖。
 - `-j, --concurrency <number>` - 目录并发数（默认 4，上限 32）
 - `--lossless` - 无损编码：WebP / AVIF / TIFF 走原生无损，PNG 拉满压缩级别，JPEG 退回最高质量 q100
 - `--max-size <size>` - 目标体积上限，如 `200kb` / `1.5mb`；二分搜索最高质量使产物 ≤ 该体积
