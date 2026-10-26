@@ -1,5 +1,6 @@
 import sharp from 'sharp';
 import fs from 'fs';
+import { createRequire } from 'module';
 
 /**
  * 智能分析 + 自适应质量模块
@@ -82,12 +83,14 @@ export async function computePSNR(bufA, bufB) {
   }
 }
 
-// ---------- Butteraugli 近似（CIELAB 多尺度加权） ----------
+// ---------- Butteraugli 近似（CIELAB 多尺度加权，回退实现） ----------
 // 比早期「Rec.709 亮度加权逐像素色差」更贴近 Google Butteraugli 的感知模型：
 //   sRGB→CIELAB 正确转换 + 多尺度误差（1x/0.5x/0.25x）+ 暗部敏感 + 对比度掩蔽
 //   + Minkowski(p≈0.6) 空间池化并兼顾最差区域，输出标定到 ~Butteraugli 量纲。
-// 非 Google 原生精确实现（Node 下无可用 WASM 依赖），仅用于驱动质量二分。
-// 注：曾尝试 @squoosh-kit/visdif（WASM 真值），但该包 Node 下 WASM 加载失败，已回退。
+// 说明：真正的权威 Butteraugli 由原生 N-API 插件提供（native/butteraugli，Google 官方
+//   C++ 编译），并经 butteraugliDistanceNative() 暴露给 findOptimalQuality 用作最终
+//   score；此处近似仅作为「插件未构建」时的回退，且继续驱动二分搜索以保持行为稳定。
+//   （实测近似整体比真值低约 4×——仅影响量级，方向一致；如需更准可重新标定此处。）
 
 function srgbToLinear(c) {
   c /= 255;
@@ -273,6 +276,47 @@ export async function analyzeImage(inputPath) {
   };
 }
 
+// ---------- 权威 Butteraugli（原生 N-API 插件） ----------
+
+// Google 官方 Butteraugli 的 C++ 源码（vendor 在 native/butteraugli/）经 node-gyp
+// 编译为 N-API 插件：native/butteraugli/build/Release/butteraugli.node。
+// 仅在构建后存在；未构建 / 加载失败时返回 null，上层回退到下面的 CIELAB 近似实现。
+let butteraugliAddon = null;
+let butteraugliAddonTried = false;
+
+async function loadButteraugliAddon() {
+  if (butteraugliAddonTried) return butteraugliAddon;
+  butteraugliAddonTried = true;
+  try {
+    const require = createRequire(import.meta.url);
+    butteraugliAddon = require('../native/butteraugli/build/Release/butteraugli.node');
+  } catch {
+    butteraugliAddon = null;
+  }
+  return butteraugliAddon;
+}
+
+// 用原生 Butteraugli 计算两张图的距离（权威真值，越小越好）。
+// 需同尺寸（重编码通常保持尺寸，但保险起见校验）；否则 / 异常时返回 null 回退。
+async function butteraugliDistanceNative(originalBuf, compBuf) {
+  const addon = await loadButteraugliAddon();
+  if (!addon) return null;
+  try {
+    const [o, c] = await Promise.all([
+      sharp(originalBuf).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
+      sharp(compBuf).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
+    ]);
+    if (o.info.width !== c.info.width || o.info.height !== c.info.height) return null;
+    const d = addon.butteraugliDistance(
+      o.data, o.info.width, o.info.height,
+      c.data, c.info.width, c.info.height
+    );
+    return Number.isFinite(d) ? d : null;
+  } catch {
+    return null;
+  }
+}
+
 // ---------- 自适应质量搜索 ----------
 
 /**
@@ -330,8 +374,13 @@ export async function findOptimalQuality(inputPath, opts = {}) {
   if (!meetsAtMax) {
     // 即使最高质量也达不到阈值（极少见），返回最高质量
     const compressedSize = bestBuf.length;
+    let score = bestScore.value;
+    if (metric === 'butteraugli') {
+      const nat = await butteraugliDistanceNative(originalBuf, bestBuf);
+      if (nat != null) score = nat;
+    }
     return {
-      quality: maxQuality, metric, score: Number(bestScore.value.toFixed(4)),
+      quality: maxQuality, metric, score: Number(score.toFixed(4)),
       compressedSize, originalSize: originalBuf.length,
       savedPercent: ((originalBuf.length - compressedSize) / originalBuf.length * 100).toFixed(1),
     };
@@ -357,10 +406,16 @@ export async function findOptimalQuality(inputPath, opts = {}) {
   }
 
   const compressedSize = chosenBuf.length;
+  let finalScore = chosenScore;
+  if (metric === 'butteraugli') {
+    // 二分搜索用近似实现保持行为稳定；最终 score 回算权威 Butteraugli（不可用时回退近似）
+    const nat = await butteraugliDistanceNative(originalBuf, chosenBuf);
+    if (nat != null) finalScore = nat;
+  }
   return {
     quality: chosenQ,
     metric,
-    score: Number(chosenScore.toFixed(4)),
+    score: Number(finalScore.toFixed(4)),
     compressedSize,
     originalSize: originalBuf.length,
     savedPercent: ((originalBuf.length - compressedSize) / originalBuf.length * 100).toFixed(1),

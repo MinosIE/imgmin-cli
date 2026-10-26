@@ -50,5 +50,8 @@
     "README.md",
     "LICENSE"
   ],
-  "packageManager": "pnpm@9.14.2+sha1.5202b50ab92394b3c922d2e293f196e2df6d441b"
+  "packageManager": "pnpm@9.14.2+sha1.5202b50ab92394b3c922d2e293f196e2df6d441b",
+  "devDependencies": {
+    "node-gyp": "^13.1.0"
+  }
 }

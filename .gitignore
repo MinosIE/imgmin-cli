@@ -3,3 +3,7 @@ dist/
 *.log
 .DS_Store
 images/
+
+# 原生 Butteraugli 插件构建产物（源码在 native/，编译生成，不入库）
+native/**/build/
+*.node
